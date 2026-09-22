@@ -90,6 +90,15 @@ describe("readChart", () => {
 			{ scopes: [{ name: "Seed catalogue \u{1f331}", position: 0.3 }] },
 		],
 		[
+			"objects without a prototype",
+			Object.assign(Object.create(null), {
+				scopes: [
+					Object.assign(Object.create(null), { name: "Login", position: 1 }),
+				],
+			}),
+			{ scopes: [{ name: "Login", position: 1 }] },
+		],
+		[
 			"keys set to undefined, as if absent",
 			{
 				title: undefined,
@@ -324,6 +333,45 @@ describe("readChart", () => {
 			{ scope: [] },
 			"scope",
 			/unknown key/,
+		],
+		[
+			"an empty unknown key at the root",
+			{ scopes: [], "": 1 },
+			'[""]',
+			/^\[""\]: unknown key; a hill chart has only/,
+		],
+		[
+			"an unknown key with a dot at the root",
+			{ scopes: [], "scopes.name": 1 },
+			'["scopes.name"]',
+			/unknown key/,
+		],
+		[
+			"an unknown key with a bracket on a scope",
+			{ scopes: [{ name: "A", position: 0.1, "tags[0]": "x" }] },
+			'scopes[0]["tags[0]"]',
+			/^scopes\[0\]\["tags\[0\]"\]: unknown key; a scope has only/,
+		],
+		[
+			"an empty unknown key on a scope",
+			{ scopes: [{ name: "A", position: 0.1, "": "x" }] },
+			'scopes[0][""]',
+			/unknown key/,
+		],
+		["a Map root", new Map([["scopes", []]]), "(root)", /expected an object/],
+		["a Date root", new Date(0), "(root)", /expected an object/],
+		[
+			"a class instance as a scope",
+			{
+				scopes: [
+					new (class {
+						name = "A";
+						position = 0.1;
+					})(),
+				],
+			},
+			"scopes[0]",
+			/expected an object/,
 		],
 		[
 			"an unknown key at the root",

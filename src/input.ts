@@ -47,7 +47,7 @@ export function readChart(data: unknown): HillChart {
 			chart.scopes = readScopes(value);
 		} else {
 			throw new HillChartError(
-				key,
+				keyPath("", key),
 				'unknown key; a hill chart has only "title", "subtitle" and "scopes"',
 			);
 		}
@@ -96,7 +96,7 @@ function readScope(
 			read.position = readPosition(value, `${field}.position`);
 		} else {
 			throw new HillChartError(
-				`${field}.${key}`,
+				keyPath(field, key),
 				'unknown key; a scope has only "name" and "position"',
 			);
 		}
@@ -165,8 +165,18 @@ function presentEntries(object: Record<string, unknown>): [string, unknown][] {
 	return Object.entries(object).filter(([, value]) => value !== undefined);
 }
 
+/** A plain object, as `JSON.parse` makes: no array, `Map`, `Date` or class instance. */
 function isObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	if (typeof value !== "object" || value === null) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+/** The field path of `key` under `parent`: `scopes[0].label`, or `scopes[0]["a.b"]` for a key a dot would garble. */
+function keyPath(parent: string, key: string): string {
+	if (key === "" || /[.[]/.test(key))
+		return `${parent}[${JSON.stringify(key)}]`;
+	return parent === "" ? key : `${parent}.${key}`;
 }
 
 /** `U+0007` for the bell character. */
