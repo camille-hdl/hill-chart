@@ -61,7 +61,8 @@ function readScopes(scopes: unknown): Scope[] {
 	if (!Array.isArray(scopes)) {
 		throw new HillChartError("scopes", "expected an array");
 	}
-	return scopes.map((scope, i) => readScope(scope, `scopes[${i}]`));
+	// Array.from visits holes too, as undefined, where map would skip them.
+	return Array.from(scopes, (scope, i) => readScope(scope, `scopes[${i}]`));
 }
 
 function readScope(scope: unknown, field: string): Scope {

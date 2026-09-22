@@ -95,6 +95,15 @@ describe("readChart", () => {
 		],
 		["a non-string title", { title: 1, scopes: [] }, "title", /string/],
 		[
+			"a hole in the scopes array",
+			{
+				// biome-ignore lint/suspicious/noSparseArray: the hole is the case under test
+				scopes: [{ name: "A", position: 0.1 }, , { name: "C", position: 0.3 }],
+			},
+			"scopes[1]",
+			/object/,
+		],
+		[
 			"an invalid title before invalid scopes",
 			{ title: 1, scopes: [{ name: "" }] },
 			"title",

@@ -51,7 +51,7 @@ function describe(scopes: Scope[]): string {
 		.toSorted((a, b) => a.position - b.position)
 		.map(
 			({ name, position }) =>
-				`${name}: ${side(position)}, ${position.toFixed(2)}.`,
+				`${name}: ${side(position)}, ${String(position)}.`,
 		)
 		.join(" ");
 }

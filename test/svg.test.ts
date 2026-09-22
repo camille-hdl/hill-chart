@@ -47,7 +47,7 @@ describe("renderSvg", () => {
 		});
 		assert.equal(
 			desc(svg),
-			"Plot map: uphill, 0.08. Watering schedule: uphill, 0.08. Harvest log: top, 0.50. Login: downhill, 0.90.",
+			"Plot map: uphill, 0.08. Watering schedule: uphill, 0.08. Harvest log: top, 0.5. Login: downhill, 0.9.",
 		);
 	});
 
@@ -55,10 +55,20 @@ describe("renderSvg", () => {
 		assert.equal(
 			desc(renderSvg(fixture("sample"))),
 			"Plot map: uphill, 0.08. Seed catalogue import: uphill, 0.22. Watering schedule: uphill, 0.35. " +
-				"Volunteer sign-up and shift swapping between neighbours: uphill, 0.45. Harvest log: top, 0.50. " +
+				"Volunteer sign-up and shift swapping between neighbours: uphill, 0.45. Harvest log: top, 0.5. " +
 				"Compost tracker: downhill, 0.62. Tool library: downhill, 0.74. Notifications: downhill, 0.86. " +
 				"Login: downhill, 0.97.",
 		);
+	});
+
+	test("describes a position as typed, never rounded across a side", () => {
+		const svg = renderSvg({
+			scopes: [
+				{ name: "Plot map", position: 0.499 },
+				{ name: "Login", position: 0.501 },
+			],
+		});
+		assert.equal(desc(svg), "Plot map: uphill, 0.499. Login: downhill, 0.501.");
 	});
 
 	test('describes a hill chart without scopes as "No scopes."', () => {
