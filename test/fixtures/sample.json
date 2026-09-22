@@ -1,0 +1,18 @@
+{
+	"title": "Community garden planner",
+	"subtitle": "Week 12",
+	"scopes": [
+		{ "name": "Plot map", "position": 0.08 },
+		{ "name": "Seed catalogue import", "position": 0.22 },
+		{ "name": "Watering schedule", "position": 0.35 },
+		{
+			"name": "Volunteer sign-up and shift swapping between neighbours",
+			"position": 0.45
+		},
+		{ "name": "Harvest log", "position": 0.5 },
+		{ "name": "Compost tracker", "position": 0.62 },
+		{ "name": "Tool library", "position": 0.74 },
+		{ "name": "Notifications", "position": 0.86 },
+		{ "name": "Login", "position": 0.97 }
+	]
+}

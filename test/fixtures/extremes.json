@@ -1,0 +1,7 @@
+{
+	"scopes": [
+		{ "name": "Not started", "position": 0 },
+		{ "name": "Figured out", "position": 0.5 },
+		{ "name": "Shipped", "position": 1 }
+	]
+}
