@@ -126,6 +126,54 @@ describe("renderSvg", () => {
 		assert.doesNotMatch(svg, /<a|<plan|"b"/);
 	});
 
+	test("paints the background over the whole viewBox", () => {
+		const svg = renderSvg(fixture("sample"));
+		const viewBox = svg.match(/viewBox="(\S+) (\S+) (\S+) (\S+)"/)?.slice(1);
+		assert.ok(viewBox);
+		const [x, y, width, height] = viewBox;
+		assert.match(
+			svg,
+			new RegExp(
+				`\n<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#fff1e5"/>\n`,
+			),
+		);
+	});
+
+	test("draws no background on a transparent theme", () => {
+		const svg = renderSvg(fixture("sample"), { background: "transparent" });
+		assert.doesNotMatch(svg, /<rect|transparent/);
+		assert.equal(
+			svg,
+			renderSvg(fixture("sample")).replace(/<rect [^>]*>\n/, ""),
+		);
+	});
+
+	test("colors each element with its theme key", () => {
+		const svg = renderSvg(fixture("title-subtitle"), {
+			background: "#010101",
+			ink: "#020202",
+			muted: "#030303",
+			dot: "#ABC",
+			axis: "#050505",
+		});
+		const fill = (element: string | undefined) =>
+			element?.match(/ fill="([^"]*)"/)?.[1];
+		const stroke = (element: string | undefined) =>
+			element?.match(/ stroke="([^"]*)"/)?.[1];
+		const texts = svg.match(/<text [^>]*>/g) ?? [];
+		const circles = svg.match(/<circle [^>]*>/g) ?? [];
+		assert.equal(fill(svg.match(/<rect [^>]*>/)?.[0]), "#010101");
+		assert.equal(stroke(svg.match(/<line [^>]*>/)?.[0]), "#050505");
+		assert.equal(stroke(svg.match(/<path [^>]*>/)?.[0]), "#020202");
+		assert.ok(circles.length > 0);
+		assert.deepEqual(new Set(circles.map(fill)), new Set(["#abc"]));
+		assert.deepEqual(texts.map(fill), [
+			...circles.map(() => "#020202"), // names
+			"#020202", // title
+			"#030303", // subtitle
+		]);
+	});
+
 	test("writes no negative zero", () => {
 		assert.doesNotMatch(renderSvg(fixture("extremes")), /-0\.0\b/);
 	});

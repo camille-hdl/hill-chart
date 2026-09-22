@@ -143,6 +143,150 @@ describe("run", () => {
 		assert.equal(stderr, "hill-chart: <stdin>: scopes: required\n");
 	});
 
+	const themePath = (name: string) =>
+		fileURLToPath(new URL(`fixtures/themes/${name}.json`, import.meta.url));
+
+	test("draws with the --theme file, without a background when transparent", async () => {
+		const { code, stdout, stderr } = await runCli([
+			samplePath,
+			"--theme",
+			themePath("transparent"),
+		]);
+		assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
+		assert.equal(
+			stdout,
+			renderSvg(JSON.parse(sampleJson), { background: "transparent" }),
+		);
+		assert.doesNotMatch(stdout, /<rect/);
+	});
+
+	test("draws dots in the --theme color, lowercased", async () => {
+		const { code, stdout } = await runCli([
+			samplePath,
+			"--theme",
+			themePath("uppercase-dot"),
+		]);
+		assert.equal(code, 0);
+		const dots: string[] = stdout.match(/<circle [^>]*>/g) ?? [];
+		assert.equal(dots.length, 9);
+		assert.ok(
+			dots.every((dot) => dot.includes(' fill="#abc"')),
+			dots[0],
+		);
+	});
+
+	test("applies the --theme file to data from stdin", async () => {
+		const { code, stdout } = await runCli(
+			["--theme", themePath("transparent")],
+			sampleJson,
+		);
+		assert.equal(code, 0);
+		assert.doesNotMatch(stdout, /<rect/);
+	});
+
+	const invalidThemes: [string, string][] = [
+		[
+			"named-color",
+			'theme.dot: expected a hex color like "#990f3d", got "red"',
+		],
+		[
+			"misspelled-key",
+			'theme.backgroud: unknown key; a theme has only "background", "ink", "muted", "dot", "axis", "fontSize", "width" and "seed"',
+		],
+		["narrow-width", "theme.width: must be a number from 200 to 4000, got 100"],
+		[
+			"large-font-size",
+			"theme.fontSize: must be a number from 6 to 96, got 100",
+		],
+		[
+			"fractional-seed",
+			"theme.seed: must be an integer from 0 to 4294967295, got 1.5",
+		],
+		[
+			"negative-seed",
+			"theme.seed: must be an integer from 0 to 4294967295, got -1",
+		],
+		["array", "theme: expected an object"],
+	];
+
+	for (const [name, error] of invalidThemes) {
+		test(`exits 1 on the ${name} theme file, naming the theme file and the field`, async () => {
+			const path = themePath(`invalid/${name}`);
+			assert.deepEqual(await runCli([samplePath, "--theme", path]), {
+				code: 1,
+				stdout: "",
+				stderr: `hill-chart: ${path}: ${error}\n`,
+			});
+		});
+	}
+
+	test("names the theme file on an invalid theme with data from stdin", async () => {
+		const path = themePath("invalid/named-color");
+		const { code, stderr } = await runCli(["--theme", path], sampleJson);
+		assert.equal(code, 1);
+		assert.ok(stderr.startsWith(`hill-chart: ${path}: theme.dot: `), stderr);
+	});
+
+	test("names the theme file on a theme key cited in brackets", async () => {
+		const path = tempFile("empty-key-theme.json", '{"":1}');
+		const { code, stderr } = await runCli([samplePath, "--theme", path]);
+		assert.equal(code, 1);
+		assert.ok(stderr.startsWith(`hill-chart: ${path}: theme[""]: `), stderr);
+	});
+
+	test("names the data file on invalid data with a valid theme", async () => {
+		const path = fileURLToPath(
+			new URL("fixtures/invalid/label.json", import.meta.url),
+		);
+		const { code, stderr } = await runCli([
+			path,
+			"--theme",
+			themePath("transparent"),
+		]);
+		assert.equal(code, 1);
+		assert.ok(
+			stderr.startsWith(`hill-chart: ${path}: scopes[0].label: `),
+			stderr,
+		);
+	});
+
+	test('names the data file on an unknown "theme" key in the data, without --theme', async () => {
+		const { code, stderr } = await runCli([], '{"scopes":[],"theme":{}}');
+		assert.equal(code, 1);
+		assert.ok(
+			stderr.startsWith("hill-chart: <stdin>: theme: unknown key"),
+			stderr,
+		);
+	});
+
+	test("exits 1 on invalid JSON in the theme file, naming the theme file", async () => {
+		const path = tempFile("broken-theme.json", "{");
+		const { code, stdout, stderr } = await runCli([
+			samplePath,
+			"--theme",
+			path,
+		]);
+		assert.equal(code, 1);
+		assert.equal(stdout, "");
+		assert.match(
+			stderr,
+			/^hill-chart: \S+broken-theme\.json: invalid JSON: \S.*\n$/,
+		);
+		assert.ok(stderr.startsWith(`hill-chart: ${path}: invalid JSON: `), stderr);
+	});
+
+	test("exits 2 on a theme file it cannot read", async () => {
+		const path = join(dir, "no-theme.json");
+		const { code, stdout, stderr } = await runCli([
+			samplePath,
+			"--theme",
+			path,
+		]);
+		assert.equal(code, 2);
+		assert.equal(stdout, "");
+		assert.match(stderr, /^hill-chart: cannot read \S+no-theme\.json: .+\n$/);
+	});
+
 	test("exits 2 on a file it cannot read", async () => {
 		const path = join(dir, "does-not-exist.json");
 		const { code, stdout, stderr } = await runCli([path]);

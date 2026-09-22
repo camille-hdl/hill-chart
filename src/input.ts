@@ -31,6 +31,23 @@ const DEFAULT_THEME: Theme = JSON.parse(
 	readFileSync(new URL("../default-theme.json", import.meta.url), "utf8"),
 );
 
+/** How to read each theme key, from a value and its field. */
+const THEME_READERS: {
+	[K in keyof Theme]: (value: unknown, field: string) => Theme[K];
+} = {
+	background: (value, field) =>
+		value === "transparent"
+			? value
+			: readColor(value, field, ' or "transparent"'),
+	ink: readColor,
+	muted: readColor,
+	dot: readColor,
+	axis: readColor,
+	fontSize: (value, field) => readNumber(value, field, 6, 96),
+	width: (value, field) => readNumber(value, field, 200, 4000),
+	seed: readSeed,
+};
+
 /** Validates `data` and returns it as a new `HillChart`, or throws `HillChartError`. */
 export function readChart(data: unknown): HillChart {
 	if (!isObject(data)) {
@@ -60,10 +77,28 @@ export function readChart(data: unknown): HillChart {
 
 /** Returns the theme to draw with: the default theme when `theme` is undefined. */
 export function readTheme(theme: unknown): Theme {
-	if (theme !== undefined) {
-		throw new HillChartError("theme", "custom themes are not supported yet");
+	const read: Theme = { ...DEFAULT_THEME };
+	if (theme === undefined) return read;
+	if (!isObject(theme)) throw new HillChartError("theme", "expected an object");
+	for (const [key, value] of presentEntries(theme)) {
+		if (!Object.hasOwn(THEME_READERS, key)) {
+			throw new HillChartError(
+				keyPath("theme", key),
+				'unknown key; a theme has only "background", "ink", "muted", "dot", "axis", "fontSize", "width" and "seed"',
+			);
+		}
+		readThemeKey(read, key as keyof Theme, value);
 	}
-	return { ...DEFAULT_THEME };
+	return read;
+}
+
+/** Sets `read[key]` to `value`, once valid. */
+function readThemeKey<K extends keyof Theme>(
+	read: Theme,
+	key: K,
+	value: unknown,
+): void {
+	read[key] = THEME_READERS[key](value, keyPath("theme", key));
 }
 
 function readScopes(scopes: unknown): Scope[] {
@@ -93,7 +128,7 @@ function readScope(
 		if (key === "name") {
 			read.name = readName(value, field, names);
 		} else if (key === "position") {
-			read.position = readPosition(value, `${field}.position`);
+			read.position = readNumber(value, `${field}.position`, 0, 1);
 		} else {
 			throw new HillChartError(
 				keyPath(field, key),
@@ -128,19 +163,53 @@ function readName(
 	return text;
 }
 
-function readPosition(position: unknown, field: string): number {
+/** Reads a finite number from `min` to `max`, both included. */
+function readNumber(
+	number: unknown,
+	field: string,
+	min: number,
+	max: number,
+): number {
 	if (
-		typeof position !== "number" ||
-		!Number.isFinite(position) ||
-		position < 0 ||
-		position > 1
+		typeof number !== "number" ||
+		!Number.isFinite(number) ||
+		number < min ||
+		number > max
 	) {
 		throw new HillChartError(
 			field,
-			`must be a number from 0 to 1, got ${show(position)}`,
+			`must be a number from ${min} to ${max}, got ${show(number)}`,
 		);
 	}
-	return position;
+	return number;
+}
+
+/** Reads the Wobble's seed: an unsigned 32-bit integer. */
+function readSeed(seed: unknown, field: string): number {
+	const max = 2 ** 32 - 1;
+	if (
+		typeof seed !== "number" ||
+		!Number.isInteger(seed) ||
+		seed < 0 ||
+		seed > max
+	) {
+		throw new HillChartError(
+			field,
+			`must be an integer from 0 to ${max}, got ${show(seed)}`,
+		);
+	}
+	return seed;
+}
+
+/** Reads a `#rgb` or `#rrggbb` color, lowercased. `orElse` names the other accepted values in the message. */
+function readColor(color: unknown, field: string, orElse = ""): string {
+	if (typeof color !== "string" || !/^#([\da-f]{3}|[\da-f]{6})$/i.test(color)) {
+		throw new HillChartError(
+			field,
+			`expected a hex color like "#990f3d"${orElse}, got ${show(color)}`,
+		);
+	}
+	return color.toLowerCase();
 }
 
 /** Reads text as it will be drawn: in NFC, every run of whitespace as one space, trimmed, and not empty. */

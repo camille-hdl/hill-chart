@@ -109,6 +109,29 @@ describe("layout", () => {
 		assert.ok(Math.abs(hill.at(-1)?.y ?? Number.NaN) < 1e-9);
 	});
 
+	test("spans the hill over a theme's width, whatever the names", () => {
+		const narrow = readTheme({ width: 480 });
+		for (const chart of [fixture("sample"), fixture("empty")]) {
+			const l = layout(chart, narrow);
+			assert.deepEqual(l.hill[0], { x: 0, y: 0 });
+			assert.equal(l.hill.at(-1)?.x, 480);
+			assert.deepEqual(
+				l.scopes.map(({ dot }) => dot.center.x),
+				chart.scopes.map(({ position }) => position * 480),
+			);
+		}
+	});
+
+	test("sizes names and subtitle at the theme's font size, and the title at 1.5 times", () => {
+		const l = layout(fixture("sample"), readTheme({ fontSize: 24 }));
+		assert.deepEqual(
+			new Set(l.scopes.map(({ name }) => name.size)),
+			new Set([24]),
+		);
+		assert.equal(l.subtitle?.size, 24);
+		assert.equal(l.title?.size, 36);
+	});
+
 	test("places a scope's dot regardless of the other scopes", () => {
 		const a = { name: "A", position: 0.3 };
 		const b = { name: "B", position: 0.6 };

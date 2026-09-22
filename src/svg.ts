@@ -27,7 +27,11 @@ export function toSvg(layout: Layout, theme: Theme): string {
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${width} ${height}" width="${width}" height="${height}" role="img">`,
 		`<title>${escapeXml(title?.lines.join(" ") ?? "Hill chart")}</title>`,
 		`<desc>${escapeXml(describe(layout.scopes.map(({ scope }) => scope)))}</desc>`,
-		`<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${theme.background}"/>`,
+		...(theme.background === "transparent"
+			? []
+			: [
+					`<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${theme.background}"/>`,
+				]),
 		`<line x1="${num(axis[0].x)}" y1="${num(axis[0].y)}" x2="${num(axis[1].x)}" y2="${num(axis[1].y)}" stroke="${theme.axis}" stroke-width="${num(AXIS_STROKE)}" stroke-linecap="round" stroke-dasharray="0.1 ${num(AXIS_DOT_SPACING)}"/>`,
 		`<path d="${path(layout.hill)}" fill="none" stroke="${theme.ink}" stroke-width="${num(HILL_STROKE)}" stroke-linecap="round" stroke-linejoin="round"/>`,
 		...layout.scopes.map(({ dot, name }) =>

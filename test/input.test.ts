@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { renderSvg } from "../src/index.ts";
 import {
@@ -6,6 +7,7 @@ import {
 	HillChartError,
 	readChart,
 	readTheme,
+	type Theme,
 } from "../src/input.ts";
 
 function deepFreeze<T>(value: T): T {
@@ -420,6 +422,17 @@ describe("renderSvg", () => {
 			},
 		);
 	});
+
+	test("throws the HillChartError of an invalid theme", () => {
+		assert.throws(
+			() => renderSvg({ scopes: [] }, { dot: "red" } as Partial<Theme>),
+			(error) => {
+				assert.ok(error instanceof HillChartError);
+				assert.equal(error.field, "theme.dot");
+				return true;
+			},
+		);
+	});
 });
 
 describe("readTheme", () => {
@@ -436,16 +449,243 @@ describe("readTheme", () => {
 		});
 	});
 
+	test("returns the default theme JSON file of the package", () => {
+		const url = new URL("../default-theme.json", import.meta.url);
+		assert.deepEqual(
+			readTheme(undefined),
+			JSON.parse(readFileSync(url, "utf8")),
+		);
+	});
+
+	test("merges a deep-frozen theme without touching it", () => {
+		const theme = deepFreeze({ dot: "#ABC", width: 480 });
+		assert.deepEqual(readTheme(theme), {
+			...readTheme(undefined),
+			dot: "#abc",
+			width: 480,
+		});
+		assert.deepEqual(theme, { dot: "#ABC", width: 480 });
+	});
+
+	test("returns a new object rather than its argument", () => {
+		const theme = readTheme(undefined);
+		assert.notEqual(readTheme(theme), theme);
+	});
+
 	test("does not share the default theme between callers", () => {
 		const theme = readTheme(undefined);
 		theme.width = 200;
 		assert.equal(readTheme(undefined).width, 960);
 	});
 
-	test("rejects a custom theme, not supported yet", () => {
-		assert.throws(() => readTheme({ width: 200 }), {
-			name: "HillChartError",
-			field: "theme",
+	const valid: [string, unknown, Partial<Theme>][] = [
+		["an empty theme", {}, {}],
+		[
+			"a transparent background",
+			{ background: "transparent" },
+			{ background: "transparent" },
+		],
+		["a 6-digit color", { dot: "#1a2b3c" }, { dot: "#1a2b3c" }],
+		["a 3-digit color", { ink: "#abc" }, { ink: "#abc" }],
+		[
+			"an uppercase color, lowercased",
+			{ dot: "#ABC", axis: "#A1B2C3" },
+			{ dot: "#abc", axis: "#a1b2c3" },
+		],
+		["a width", { width: 480 }, { width: 480 }],
+		[
+			"the smallest numbers",
+			{ fontSize: 6, width: 200, seed: 0 },
+			{ fontSize: 6, width: 200, seed: 0 },
+		],
+		[
+			"the largest numbers",
+			{ fontSize: 96, width: 4000, seed: 4294967295 },
+			{ fontSize: 96, width: 4000, seed: 4294967295 },
+		],
+		["a fractional font size", { fontSize: 13.5 }, { fontSize: 13.5 }],
+		["a key set to undefined, as absent", { dot: undefined }, {}],
+		[
+			"every key",
+			{
+				background: "#000",
+				ink: "#ffffff",
+				muted: "#999999",
+				dot: "#f00",
+				axis: "#333",
+				fontSize: 24,
+				width: 1200,
+				seed: 42,
+			},
+			{
+				background: "#000",
+				ink: "#ffffff",
+				muted: "#999999",
+				dot: "#f00",
+				axis: "#333",
+				fontSize: 24,
+				width: 1200,
+				seed: 42,
+			},
+		],
+	];
+
+	for (const [situation, theme, changes] of valid) {
+		test(`merges ${situation} onto the default theme`, () => {
+			assert.deepEqual(readTheme(theme), {
+				...readTheme(undefined),
+				...changes,
+			});
 		});
-	});
+	}
+
+	const invalid: [string, unknown, string, RegExp][] = [
+		["an array", [], "theme", /^theme: expected an object$/],
+		["null", null, "theme", /^theme: expected an object$/],
+		["a string", "#990f3d", "theme", /^theme: expected an object$/],
+		[
+			"a Map",
+			new Map([["dot", "#000"]]),
+			"theme",
+			/^theme: expected an object$/,
+		],
+		[
+			"a misspelled key",
+			{ backgroud: "#fff" },
+			"theme.backgroud",
+			/^theme\.backgroud: unknown key; a theme has only "background", "ink", "muted", "dot", "axis", "fontSize", "width" and "seed"$/,
+		],
+		["a font key", { font: "Inter" }, "theme.font", /unknown key/],
+		[
+			"a key of Object.prototype",
+			{ toString: "#000" },
+			"theme.toString",
+			/unknown key/,
+		],
+		["an empty key", { "": 1 }, 'theme[""]', /unknown key/],
+		[
+			"a __proto__ key from JSON",
+			JSON.parse('{"__proto__":{}}'),
+			"theme.__proto__",
+			/unknown key/,
+		],
+		[
+			"a named color",
+			{ dot: "red" },
+			"theme.dot",
+			/^theme\.dot: expected a hex color like "#990f3d", got "red"$/,
+		],
+		["a 4-digit color", { ink: "#abcd" }, "theme.ink", /got "#abcd"$/],
+		["a color without #", { muted: "990f3d" }, "theme.muted", /got "990f3d"$/],
+		["a non-hex digit", { axis: "#99g" }, "theme.axis", /got "#99g"$/],
+		[
+			"an rgb() color",
+			{ dot: "rgb(0,0,0)" },
+			"theme.dot",
+			/got "rgb\(0,0,0\)"$/,
+		],
+		["a color as a number", { dot: 0x990f3d }, "theme.dot", /got 10030909$/],
+		[
+			"a transparent dot",
+			{ dot: "transparent" },
+			"theme.dot",
+			/got "transparent"$/,
+		],
+		["a transparent ink", { ink: "transparent" }, "theme.ink", /hex color/],
+		[
+			"a named background",
+			{ background: "white" },
+			"theme.background",
+			/^theme\.background: expected a hex color like "#990f3d" or "transparent", got "white"$/,
+		],
+		[
+			"an uppercase transparent",
+			{ background: "Transparent" },
+			"theme.background",
+			/got "Transparent"$/,
+		],
+		[
+			"a width below 200",
+			{ width: 100 },
+			"theme.width",
+			/^theme\.width: must be a number from 200 to 4000, got 100$/,
+		],
+		[
+			"a width above 4000",
+			{ width: 4001 },
+			"theme.width",
+			/from 200 to 4000, got 4001$/,
+		],
+		[
+			"a width as a string",
+			{ width: "960" },
+			"theme.width",
+			/from 200 to 4000, got "960"$/,
+		],
+		[
+			"an infinite width",
+			{ width: Number.POSITIVE_INFINITY },
+			"theme.width",
+			/got Infinity$/,
+		],
+		[
+			"a font size below 6",
+			{ fontSize: 5.9 },
+			"theme.fontSize",
+			/^theme\.fontSize: must be a number from 6 to 96, got 5\.9$/,
+		],
+		[
+			"a font size above 96",
+			{ fontSize: 100 },
+			"theme.fontSize",
+			/from 6 to 96, got 100$/,
+		],
+		["a NaN font size", { fontSize: Number.NaN }, "theme.fontSize", /got NaN$/],
+		[
+			"a fractional seed",
+			{ seed: 1.5 },
+			"theme.seed",
+			/^theme\.seed: must be an integer from 0 to 4294967295, got 1\.5$/,
+		],
+		[
+			"a negative seed",
+			{ seed: -1 },
+			"theme.seed",
+			/from 0 to 4294967295, got -1$/,
+		],
+		[
+			"a seed above 2³²−1",
+			{ seed: 4294967296 },
+			"theme.seed",
+			/got 4294967296$/,
+		],
+		["a seed as a string", { seed: "1" }, "theme.seed", /got "1"$/],
+		["a NaN seed", { seed: Number.NaN }, "theme.seed", /got NaN$/],
+		[
+			"an invalid color after a valid one, in document order",
+			{ dot: "#000", ink: "black", axis: "grey" },
+			"theme.ink",
+			/got "black"$/,
+		],
+		[
+			"an unknown key before an invalid known one, in document order",
+			{ colour: "#000", dot: "red" },
+			"theme.colour",
+			/unknown key/,
+		],
+	];
+
+	for (const [situation, theme, field, reason] of invalid) {
+		test(`rejects ${situation} with field ${field}`, () => {
+			assert.throws(
+				() => readTheme(theme),
+				(error) => {
+					assert.ok(error instanceof HillChartError);
+					assert.equal(error.field, field);
+					assert.match(error.message, reason);
+					return true;
+				},
+			);
+		});
+	}
 });
