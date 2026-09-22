@@ -53,3 +53,15 @@ Camille's palette (camillehdl.dev/palette), from which the default theme derives
 **Wobble**:
 The irregularity of the hand-drawn strokes, drawn from a seed so that the same input always yields the same image.
 _Avoid_: jitter, noise, roughness
+
+**Axis**:
+The discreet dotted vertical line marking the top; also the theme key that colors it.
+_Avoid_: divider, midline
+
+**Leader line**:
+A thin stroke joining a scope's name to its dot, drawn only when the name had to move away from its dot.
+_Avoid_: callout, connector
+
+**Embedded font**:
+The font shipped in the package, as two static instances, used to measure text and to draw every PNG.
+_Avoid_: bundled font, default font
