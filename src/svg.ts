@@ -16,7 +16,7 @@ const ENTITIES: Record<string, string> = {
 
 /** Serializes a layout as a standalone, accessible SVG document. */
 export function toSvg(layout: Layout, theme: Theme): string {
-	const { viewBox, axis, title } = layout;
+	const { viewBox, axis, title, subtitle } = layout;
 	const [x, y, width, height] = [
 		viewBox.x,
 		viewBox.y,
@@ -39,6 +39,7 @@ export function toSvg(layout: Layout, theme: Theme): string {
 			].join("\n"),
 		),
 		...(title ? [text(title, theme.ink)] : []),
+		...(subtitle ? [text(subtitle, theme.muted)] : []),
 		"</svg>",
 		"",
 	].join("\n");

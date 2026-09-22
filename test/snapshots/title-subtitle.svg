@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.0 -341.0 1029.0 359.0" width="1029.0" height="359.0" role="img">
+<title>Neighbourhood tool library</title>
+<desc>Lending rules: uphill, 0.3. Borrower accounts: downhill, 0.55. Return reminders: downhill, 0.8.</desc>
+<rect x="-18.0" y="-341.0" width="1029.0" height="359.0" fill="#fff1e5"/>
+<line x1="480.0" y1="-240.0" x2="480.0" y2="0.0" stroke="#b8afa5" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="0.1 6.0"/>
+<path d="M0.0,0.0 L20.0,-15.7 L40.0,-31.3 L60.0,-46.8 L80.0,-62.1 L100.0,-77.1 L120.0,-91.8 L140.0,-106.1 L160.0,-120.0 L180.0,-133.3 L200.0,-146.1 L220.0,-158.2 L240.0,-169.7 L260.0,-180.4 L280.0,-190.4 L300.0,-199.6 L320.0,-207.8 L340.0,-215.2 L360.0,-221.7 L380.0,-227.3 L400.0,-231.8 L420.0,-235.4 L440.0,-237.9 L460.0,-239.5 L480.0,-240.0 L500.0,-239.5 L520.0,-237.9 L540.0,-235.4 L560.0,-231.8 L580.0,-227.3 L600.0,-221.7 L620.0,-215.2 L640.0,-207.8 L660.0,-199.6 L680.0,-190.4 L700.0,-180.4 L720.0,-169.7 L740.0,-158.2 L760.0,-146.1 L780.0,-133.3 L800.0,-120.0 L820.0,-106.1 L840.0,-91.8 L860.0,-77.1 L880.0,-62.1 L900.0,-46.8 L920.0,-31.3 L940.0,-15.7 L960.0,0.0" fill="none" stroke="#262a33" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<g class="scope">
+  <circle cx="288.0" cy="-194.2" r="8.1" fill="#990f3d"/>
+  <text text-anchor="end" font-family="'Atkinson Hyperlegible Next', Avenir, 'Segoe UI', Seravek, Ubuntu, Calibri, 'DejaVu Sans', sans-serif" font-size="18.0" font-weight="600" fill="#262a33"><tspan x="270.9" y="-187.9">Lending rules</tspan></text>
+</g>
+<g class="scope">
+  <circle cx="528.0" cy="-237.0" r="8.1" fill="#990f3d"/>
+  <text text-anchor="start" font-family="'Atkinson Hyperlegible Next', Avenir, 'Segoe UI', Seravek, Ubuntu, Calibri, 'DejaVu Sans', sans-serif" font-size="18.0" font-weight="600" fill="#262a33"><tspan x="545.1" y="-230.7">Borrower accounts</tspan></text>
+</g>
+<g class="scope">
+  <circle cx="768.0" cy="-141.1" r="8.1" fill="#990f3d"/>
+  <text text-anchor="start" font-family="'Atkinson Hyperlegible Next', Avenir, 'Segoe UI', Seravek, Ubuntu, Calibri, 'DejaVu Sans', sans-serif" font-size="18.0" font-weight="600" fill="#262a33"><tspan x="785.1" y="-134.8">Return reminders</tspan></text>
+</g>
+<text text-anchor="start" font-family="'Atkinson Hyperlegible Next', Avenir, 'Segoe UI', Seravek, Ubuntu, Calibri, 'DejaVu Sans', sans-serif" font-size="27.0" font-weight="700" fill="#262a33"><tspan x="0.0" y="-296.2">Neighbourhood tool library</tspan></text>
+<text text-anchor="start" font-family="'Atkinson Hyperlegible Next', Avenir, 'Segoe UI', Seravek, Ubuntu, Calibri, 'DejaVu Sans', sans-serif" font-size="18.0" font-weight="600" fill="#6b6259"><tspan x="0.0" y="-271.2">Cycle 2, week 5: before the spring open day</tspan></text>
+</svg>

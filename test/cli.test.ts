@@ -93,18 +93,48 @@ describe("run", () => {
 		assert.ok(stderr.startsWith(`hill-chart: ${path}: invalid JSON: `), stderr);
 	});
 
-	test("exits 1 on invalid data, naming the file and the field", async () => {
-		const path = tempFile(
-			"out-of-bounds.json",
-			'{"scopes":[{"name":"A","position":1.2}]}',
+	const invalidData: [string, string][] = [
+		[
+			"label",
+			'scopes[0].label: unknown key; a scope has only "name" and "position"',
+		],
+		[
+			"color",
+			'scopes[0].color: unknown key; a scope has only "name" and "position"',
+		],
+		[
+			"duplicate-name",
+			'scopes[2].name: duplicate name "Reply" (same as scopes[0])',
+		],
+		[
+			"position-out-of-bounds",
+			"scopes[0].position: must be a number from 0 to 1, got 70",
+		],
+		["control-character", "scopes[0].name: contains control character U+0007"],
+		["missing-scopes", "scopes: required"],
+		["empty-subtitle", "subtitle: must not be empty (omit it instead)"],
+	];
+
+	for (const [name, error] of invalidData) {
+		test(`exits 1 on the ${name} data file, naming the file and the field`, async () => {
+			const path = fileURLToPath(
+				new URL(`fixtures/invalid/${name}.json`, import.meta.url),
+			);
+			assert.deepEqual(await runCli([path]), {
+				code: 1,
+				stdout: "",
+				stderr: `hill-chart: ${path}: ${error}\n`,
+			});
+		});
+	}
+
+	test("draws text normalized, from stdin", async () => {
+		const { code, stdout } = await runCli(
+			[],
+			'{"scopes":[{"name":"A\\n  B","position":0.5}]}',
 		);
-		const { code, stdout, stderr } = await runCli([path]);
-		assert.equal(code, 1);
-		assert.equal(stdout, "");
-		assert.equal(
-			stderr,
-			`hill-chart: ${path}: scopes[0].position: must be a number from 0 to 1, got 1.2\n`,
-		);
+		assert.equal(code, 0);
+		assert.match(stdout, /<desc>A B: top, 0\.5\.<\/desc>/);
 	});
 
 	test("exits 1 on invalid data from stdin", async () => {

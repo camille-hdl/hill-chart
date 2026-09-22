@@ -65,16 +65,29 @@ export function layout(chart: HillChart, theme: Theme): Layout {
 		{ x: 0, y: -height, width, height },
 		...scopes.flatMap(({ dot, name }) => [circleBox(dot), name.box]),
 	]);
+	const em = theme.fontSize;
+	const headingsBottom = envelope.y - TITLE_GAP * em;
+	const subtitle =
+		chart.subtitle === undefined
+			? undefined
+			: placeHeading(chart.subtitle, 600, em, envelope.x, headingsBottom);
 	const title =
 		chart.title === undefined
 			? undefined
-			: placeTitle(chart.title, envelope, theme.fontSize);
+			: placeHeading(
+					chart.title,
+					700,
+					TITLE_SIZE * em,
+					envelope.x,
+					subtitle ? subtitle.box.y : headingsBottom,
+				);
+	const headings = [title, subtitle].filter((block) => block !== undefined);
 
 	const result: Layout = {
 		viewBox: roundOutward(
 			grow(
-				boundingBox(title ? [envelope, title.box] : [envelope]),
-				MARGIN * theme.fontSize,
+				boundingBox([envelope, ...headings.map((block) => block.box)]),
+				MARGIN * em,
 			),
 		),
 		hill: Array.from({ length: HILL_SAMPLES + 1 }, (_, i) =>
@@ -84,6 +97,7 @@ export function layout(chart: HillChart, theme: Theme): Layout {
 		scopes,
 	};
 	if (title) result.title = title;
+	if (subtitle) result.subtitle = subtitle;
 	return result;
 }
 
@@ -103,11 +117,16 @@ function placeScope(
 	return { scope, dot: { center, radius }, name };
 }
 
-/** The title sits above everything else, aligned on its left edge. */
-function placeTitle(title: string, envelope: Box, em: number): TextBlock {
-	const size = TITLE_SIZE * em;
-	const middle = envelope.y - TITLE_GAP * em - (LINE_HEIGHT * size) / 2;
-	return textBlock([title], 700, size, "start", envelope.x, middle);
+/** A title or subtitle: one line starting at `x`, its box ending at `bottom`. */
+function placeHeading(
+	text: string,
+	weight: Weight,
+	size: number,
+	x: number,
+	bottom: number,
+): TextBlock {
+	const middle = bottom - (LINE_HEIGHT * size) / 2;
+	return textBlock([text], weight, size, "start", x, middle);
 }
 
 /** A block of text whose lines are vertically centered on `middle`. */

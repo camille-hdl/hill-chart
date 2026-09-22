@@ -1,0 +1,9 @@
+{
+	"title": "Neighbourhood tool library",
+	"subtitle": "Cycle 2, week 5: before the spring open day",
+	"scopes": [
+		{ "name": "Lending rules", "position": 0.3 },
+		{ "name": "Borrower accounts", "position": 0.55 },
+		{ "name": "Return reminders", "position": 0.8 }
+	]
+}

@@ -1,0 +1,7 @@
+{
+	"scopes": [
+		{ "name": "Reply", "position": 0.1 },
+		{ "name": "Harvest log", "position": 0.4 },
+		{ "name": " Reply ", "position": 0.2 }
+	]
+}

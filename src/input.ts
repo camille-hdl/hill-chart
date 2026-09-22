@@ -24,6 +24,9 @@ export class HillChartError extends Error {
 	}
 }
 
+/** Characters left after normalization that XML 1.0 forbids: controls, U+FFFE, U+FFFF and lone surrogates. */
+const FORBIDDEN_IN_XML = /[\p{Cc}\p{Cs}\uFFFE\uFFFF]/u;
+
 const DEFAULT_THEME: Theme = JSON.parse(
 	readFileSync(new URL("../default-theme.json", import.meta.url), "utf8"),
 );
@@ -36,9 +39,23 @@ export function readChart(data: unknown): HillChart {
 			'expected an object with a "scopes" array',
 		);
 	}
-	const title =
-		data.title === undefined ? {} : { title: readTitle(data.title) };
-	return { ...title, scopes: readScopes(data.scopes) };
+	const chart: Partial<HillChart> = {};
+	for (const [key, value] of presentEntries(data)) {
+		if (key === "title" || key === "subtitle") {
+			chart[key] = readText(value, key, "must not be empty (omit it instead)");
+		} else if (key === "scopes") {
+			chart.scopes = readScopes(value);
+		} else {
+			throw new HillChartError(
+				key,
+				'unknown key; a hill chart has only "title", "subtitle" and "scopes"',
+			);
+		}
+	}
+	if (chart.scopes === undefined) {
+		throw new HillChartError("scopes", "required");
+	}
+	return { ...chart, scopes: chart.scopes };
 }
 
 /** Returns the theme to draw with: the default theme when `theme` is undefined. */
@@ -49,40 +66,66 @@ export function readTheme(theme: unknown): Theme {
 	return { ...DEFAULT_THEME };
 }
 
-function readTitle(title: unknown): string {
-	if (typeof title !== "string") {
-		throw new HillChartError("title", "expected a string");
-	}
-	return title;
-}
-
 function readScopes(scopes: unknown): Scope[] {
-	if (scopes === undefined) throw new HillChartError("scopes", "required");
 	if (!Array.isArray(scopes)) {
 		throw new HillChartError("scopes", "expected an array");
 	}
+	const names = new Map<string, string>(); // name → field of the scope it names
 	// Array.from visits holes too, as undefined, where map would skip them.
-	return Array.from(scopes, (scope, i) => readScope(scope, `scopes[${i}]`));
+	return Array.from(scopes, (scope, i) =>
+		readScope(scope, `scopes[${i}]`, names),
+	);
 }
 
-function readScope(scope: unknown, field: string): Scope {
+function readScope(
+	scope: unknown,
+	field: string,
+	names: Map<string, string>,
+): Scope {
 	if (!isObject(scope)) {
 		throw new HillChartError(
 			field,
 			'expected an object with "name" and "position"',
 		);
 	}
-	return {
-		name: readName(scope.name, `${field}.name`),
-		position: readPosition(scope.position, `${field}.position`),
-	};
+	const read: Partial<Scope> = {};
+	for (const [key, value] of presentEntries(scope)) {
+		if (key === "name") {
+			read.name = readName(value, field, names);
+		} else if (key === "position") {
+			read.position = readPosition(value, `${field}.position`);
+		} else {
+			throw new HillChartError(
+				`${field}.${key}`,
+				'unknown key; a scope has only "name" and "position"',
+			);
+		}
+	}
+	if (read.name === undefined) {
+		throw new HillChartError(`${field}.name`, "required");
+	}
+	if (read.position === undefined) {
+		throw new HillChartError(`${field}.position`, "required");
+	}
+	return { name: read.name, position: read.position };
 }
 
-function readName(name: unknown, field: string): string {
-	if (typeof name !== "string" || name === "") {
-		throw new HillChartError(field, "expected a non-empty string");
+/** Reads the name of the scope at `field`, unique among the `names` read so far. */
+function readName(
+	name: unknown,
+	field: string,
+	names: Map<string, string>,
+): string {
+	const text = readText(name, `${field}.name`, "must not be empty");
+	const other = names.get(text);
+	if (other !== undefined) {
+		throw new HillChartError(
+			`${field}.name`,
+			`duplicate name ${JSON.stringify(text)} (same as ${other})`,
+		);
 	}
-	return name;
+	names.set(text, field);
+	return text;
 }
 
 function readPosition(position: unknown, field: string): number {
@@ -100,8 +143,36 @@ function readPosition(position: unknown, field: string): number {
 	return position;
 }
 
+/** Reads text as it will be drawn: in NFC, every run of whitespace as one space, trimmed, and not empty. */
+function readText(text: unknown, field: string, whenEmpty: string): string {
+	if (typeof text !== "string") {
+		throw new HillChartError(field, "expected a string");
+	}
+	const normalized = text.normalize("NFC").replace(/\s+/g, " ").trim();
+	if (normalized === "") throw new HillChartError(field, whenEmpty);
+	const control = normalized.match(FORBIDDEN_IN_XML)?.[0];
+	if (control !== undefined) {
+		throw new HillChartError(
+			field,
+			`contains control character ${codePoint(control)}`,
+		);
+	}
+	return normalized;
+}
+
+/** The keys of `object` in document order, skipping those set to `undefined` as if absent. */
+function presentEntries(object: Record<string, unknown>): [string, unknown][] {
+	return Object.entries(object).filter(([, value]) => value !== undefined);
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** `U+0007` for the bell character. */
+function codePoint(character: string): string {
+	const hex = (character.codePointAt(0) ?? 0).toString(16).toUpperCase();
+	return `U+${hex.padStart(4, "0")}`;
 }
 
 /** Shows a JSON value as the user wrote it, e.g. `1.2`, `"0.5"`, `NaN`. */

@@ -5,7 +5,7 @@ import { type HillChart, readChart, readTheme } from "../src/input.ts";
 import { type Box, type Layout, layout, type Point } from "../src/layout.ts";
 
 const theme = readTheme(undefined);
-const fixtures = ["sample", "empty", "extremes"];
+const fixtures = ["sample", "empty", "extremes", "title-subtitle"];
 
 function fixture(name: string): HillChart {
 	const url = new URL(`fixtures/${name}.json`, import.meta.url);
@@ -36,6 +36,7 @@ function elementBoxes(l: Layout): Box[] {
 			name.box,
 		]),
 		...(l.title ? [l.title.box] : []),
+		...(l.subtitle ? [l.subtitle.box] : []),
 	];
 }
 
@@ -127,6 +128,29 @@ describe("layout", () => {
 		const titleBottom = l.title.box.y + l.title.box.height;
 		const others = elementBoxes({ ...l, title: undefined });
 		assert.ok(others.every((box) => box.y >= titleBottom));
+	});
+
+	test("puts the subtitle under the title, above the chart, at weight 600", () => {
+		const l = layout(fixture("title-subtitle"), theme);
+		assert.ok(l.title && l.subtitle);
+		assert.deepEqual(l.subtitle.lines, [
+			"Cycle 2, week 5: before the spring open day",
+		]);
+		assert.equal(l.subtitle.weight, 600);
+		assert.equal(l.subtitle.x, l.title.x);
+		assert.ok(l.title.box.y + l.title.box.height <= l.subtitle.box.y);
+		const subtitleBottom = l.subtitle.box.y + l.subtitle.box.height;
+		const chart = elementBoxes({ ...l, title: undefined, subtitle: undefined });
+		assert.ok(chart.every((box) => box.y >= subtitleBottom));
+	});
+
+	test("puts a subtitle without title above the chart", () => {
+		const l = layout({ subtitle: "Week 12", scopes: [] }, theme);
+		assert.ok(l.subtitle);
+		assert.equal(l.title, undefined);
+		const subtitleBottom = l.subtitle.box.y + l.subtitle.box.height;
+		const chart = elementBoxes({ ...l, subtitle: undefined });
+		assert.ok(chart.every((box) => box.y >= subtitleBottom));
 	});
 
 	test("has no title block without a title", () => {

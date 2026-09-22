@@ -18,7 +18,7 @@ function title(svg: string): string | undefined {
 }
 
 describe("renderSvg", () => {
-	for (const name of ["sample", "empty", "extremes"]) {
+	for (const name of ["sample", "empty", "extremes", "title-subtitle"]) {
 		test(`draws the ${name} fixture as in its snapshot`, (t) => {
 			const path = fileURLToPath(
 				new URL(`snapshots/${name}.svg`, import.meta.url),
@@ -80,6 +80,20 @@ describe("renderSvg", () => {
 			title(renderSvg(fixture("sample"))),
 			"Community garden planner",
 		);
+	});
+
+	test("draws the subtitle after the title, in the muted color at weight 600", () => {
+		const svg = renderSvg(fixture("title-subtitle"));
+		const texts = svg.match(/<text [^>]*>.*<\/text>/g) ?? [];
+		assert.match(
+			texts.at(-2) ?? "",
+			/font-weight="700" fill="#262a33">.*>Neighbourhood tool library</,
+		);
+		assert.match(
+			texts.at(-1) ?? "",
+			/font-weight="600" fill="#6b6259">.*>Cycle 2, week 5: before the spring open day</,
+		);
+		assert.equal(title(svg), "Neighbourhood tool library");
 	});
 
 	test('titles an untitled chart "Hill chart"', () => {
