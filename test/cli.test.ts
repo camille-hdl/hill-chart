@@ -326,6 +326,7 @@ describe("run, on help, version and usage errors", () => {
 			}
 			assert.match(stdout, /\nExamples:\n/);
 			assert.match(stdout, /\nExit codes:\n +0 .+\n +1 .+\n +2 .+\n$/);
+			assert.match(stdout, /\n +1 .+, and the field when there is one\n/);
 		});
 	}
 
@@ -360,6 +361,20 @@ describe("run, on help, version and usage errors", () => {
 			runCli([], sampleJson, true),
 		]);
 		assert.deepEqual(noFile, { code: 2, stdout: "", stderr: help });
+	});
+
+	test("prints the help on stdout and exits 0 with --help, even when stdin is a terminal", async () => {
+		const { code, stdout, stderr } = await runCli(["--help"], "", true);
+		assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
+		assert.match(stdout, /^Usage: hill-chart /);
+	});
+
+	test("prints the help rather than the version with --version --help", async () => {
+		const [{ stdout: help }, both] = await Promise.all([
+			runCli(["--help"]),
+			runCli(["--version", "--help"]),
+		]);
+		assert.deepEqual(both, { code: 0, stdout: help, stderr: "" });
 	});
 
 	test('reads stdin when given "-", even when stdin is a terminal', async () => {

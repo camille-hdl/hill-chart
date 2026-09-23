@@ -32,7 +32,7 @@ Examples:
 
 Exit codes:
   0  success
-  1  invalid JSON, data or theme; the message names the file and the field
+  1  invalid JSON, data or theme; the message names the file, and the field when there is one
   2  usage error, or a file that cannot be read or written
 `;
 
