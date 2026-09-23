@@ -167,7 +167,8 @@ describe("run", () => {
 			themePath("uppercase-dot"),
 		]);
 		assert.equal(code, 0);
-		const dots: string[] = stdout.match(/<circle [^>]*>/g) ?? [];
+		const dots: string[] =
+			stdout.match(/(?<=<g class="scope">\s*)<path [^>]*>/g) ?? [];
 		assert.equal(dots.length, 9);
 		assert.ok(
 			dots.every((dot) => dot.includes(' fill="#abc"')),

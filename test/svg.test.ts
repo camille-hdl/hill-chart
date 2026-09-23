@@ -17,6 +17,12 @@ function title(svg: string): string | undefined {
 	return svg.match(/<title>(.*)<\/title>/)?.[1];
 }
 
+/** The `d` of the hill: the last path drawn before the scopes. */
+function hill(svg: string): string | undefined {
+	const beforeScopes = svg.split('<g class="scope">')[0];
+	return [...beforeScopes.matchAll(/<path d="([^"]*)"/g)].at(-1)?.[1];
+}
+
 describe("renderSvg", () => {
 	for (const name of ["sample", "empty", "extremes", "title-subtitle"]) {
 		test(`draws the ${name} fixture as in its snapshot`, (t) => {
@@ -161,17 +167,54 @@ describe("renderSvg", () => {
 		const stroke = (element: string | undefined) =>
 			element?.match(/ stroke="([^"]*)"/)?.[1];
 		const texts = svg.match(/<text [^>]*>/g) ?? [];
-		const circles = svg.match(/<circle [^>]*>/g) ?? [];
+		const [beforeScopes, ...groups] = svg.split('<g class="scope">');
+		const [axisPath, hillPath] = beforeScopes.match(/<path [^>]*>/g) ?? [];
+		const dots = groups.map((group) => group.match(/<path [^>]*>/)?.[0]);
 		assert.equal(fill(svg.match(/<rect [^>]*>/)?.[0]), "#010101");
-		assert.equal(stroke(svg.match(/<line [^>]*>/)?.[0]), "#050505");
-		assert.equal(stroke(svg.match(/<path [^>]*>/)?.[0]), "#020202");
-		assert.ok(circles.length > 0);
-		assert.deepEqual(new Set(circles.map(fill)), new Set(["#abc"]));
+		assert.equal(stroke(axisPath), "#050505");
+		assert.equal(stroke(hillPath), "#020202");
+		assert.ok(dots.length > 0);
+		assert.deepEqual(new Set(dots.map(fill)), new Set(["#abc"]));
 		assert.deepEqual(texts.map(fill), [
-			...circles.map(() => "#020202"), // names
+			...dots.map(() => "#020202"), // names
 			"#020202", // title
 			"#030303", // subtitle
 		]);
+	});
+
+	test("draws the same hill whatever the scopes", () => {
+		assert.equal(
+			hill(renderSvg(fixture("sample"))),
+			hill(renderSvg(fixture("extremes"))),
+		);
+	});
+
+	test("draws a different hill with another seed", () => {
+		const chart = fixture("sample");
+		assert.notEqual(
+			hill(renderSvg(chart, { seed: 2 })),
+			hill(renderSvg(chart)),
+		);
+	});
+
+	test("draws a scope's dot the same whatever the other scopes", () => {
+		const a = { name: "Plot map", position: 0.08 };
+		const b = { name: "Harvest log", position: 0.5 };
+		const c = { name: "Login", position: 0.97 };
+		const dotOfB = (scopes: HillChart["scopes"]) => {
+			const svg = renderSvg({ scopes });
+			const groups = svg.match(/<g class="scope">[\s\S]*?<\/g>/g) ?? [];
+			const group = groups.find((g) => g.includes(">Harvest log<"));
+			return group?.match(/<path d="([^"]*)"/)?.[1];
+		};
+		const dot = dotOfB([b]);
+		assert.ok(dot);
+		assert.equal(dotOfB([a, b]), dot);
+		assert.equal(dotOfB([b, a, c]), dot);
+	});
+
+	test("writes the same bytes for the same input", () => {
+		assert.equal(renderSvg(fixture("sample")), renderSvg(fixture("sample")));
 	});
 
 	test("writes no negative zero", () => {
@@ -182,7 +225,7 @@ describe("renderSvg", () => {
 		const svg = renderSvg(fixture("sample"));
 		const numbers = [...svg.matchAll(/ ([\w-]+)="([^"]*)"/g)]
 			.filter(([, attribute]) => attribute !== "font-weight")
-			.flatMap(([, , value]) => value.split(/[\s,ML]+/))
+			.flatMap(([, , value]) => value.split(/[\s,A-Z]+/))
 			.filter((token) => /^-?[\d.]+$/.test(token));
 		assert.ok(numbers.length > 100);
 		assert.deepEqual(
