@@ -1,0 +1,70 @@
+name: Release
+
+# npmjs.com's trusted publisher names this file: rename it there too.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  release:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # 24's bundled npm supports trusted publishing; 22's does not.
+          node-version: 24
+          check-latest: true
+          package-manager-cache: false
+      - name: Tag matches the package.json version
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json, which expects $expected"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx biome ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      # The first version is published by hand, before the trusted publisher can exist.
+      # Its tag then finds it on the registry and skips the publish.
+      - name: Is this version on npm already?
+        id: npm
+        run: |
+          spec="$(node -p 'const { name, version } = require("./package.json"); `${name}@${version}`')"
+          log="$(mktemp)"
+          # npm view fails with E404 both for an unknown version and for a package never published.
+          if npm view "$spec" version > /dev/null 2> "$log"; then
+            echo "$spec is published"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          elif grep -q E404 "$log"; then
+            echo "$spec is not published"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            cat "$log" >&2
+            exit 1
+          fi
+      # Trusted publishing: npm trades the job's OIDC token for a publish token and adds provenance.
+      # prepack compiles dist.
+      - name: Publish to npm
+        if: steps.npm.outputs.published == 'false'
+        run: npm publish
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi

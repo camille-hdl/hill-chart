@@ -29,3 +29,13 @@ jobs:
       - run: npx biome ci
       - run: npx tsc --noEmit
       - run: npm test
+      # The only test of the paths the compiled output resolves: fonts, theme, wasm.
+      - name: Smoke-test the packed tarball
+        if: matrix.node == 24
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          npx --yes ./camille-hdl-hill-chart-*.tgz < "$GITHUB_WORKSPACE/test/fixtures/sample.json" > sample.svg
+          grep -q '<svg' sample.svg
+          npx --yes ./camille-hdl-hill-chart-*.tgz "$GITHUB_WORKSPACE/test/fixtures/sample.json" -o sample.png
+          test "$(file --brief --mime-type sample.png)" = image/png
