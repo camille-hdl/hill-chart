@@ -33,6 +33,12 @@ const MAX_TEXT_LENGTH = 200;
 /** The most scopes a hill chart may have, which keeps placement, quadratic in their number, to a few milliseconds. */
 const MAX_SCOPES = 100;
 
+/**
+ * Characters a terminal may act on, or that may disguise a message, when printed: controls, format characters
+ * (bidirectional controls included), lone surrogates, line and paragraph separators.
+ */
+const UNSAFE_TO_PRINT = /[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/u;
+
 const DEFAULT_THEME: Theme = JSON.parse(
 	readFileSync(new URL("../default-theme.json", import.meta.url), "utf8"),
 );
@@ -168,7 +174,7 @@ function readName(
 	if (other !== undefined) {
 		throw new HillChartError(
 			`${field}.name`,
-			`duplicate name ${JSON.stringify(text)} (same as ${other})`,
+			`duplicate name ${show(text)} (same as ${other})`,
 		);
 	}
 	names.set(text, field);
@@ -261,10 +267,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
-/** The field path of `key` under `parent`: `scopes[0].label`, or `scopes[0]["a.b"]` for a key a dot would garble. */
+/**
+ * The field path of `key` under `parent`: `scopes[0].label`, or `scopes[0]["a.b"]` for a key a dot would garble or
+ * that holds a character unsafe to print.
+ */
 function keyPath(parent: string, key: string): string {
-	if (key === "" || /[.[]/.test(key))
-		return `${parent}[${JSON.stringify(key)}]`;
+	if (key === "" || /[.[]/.test(key) || UNSAFE_TO_PRINT.test(key))
+		return `${parent}[${show(key)}]`;
 	return parent === "" ? key : `${parent}.${key}`;
 }
 
@@ -274,9 +283,27 @@ export function codePoint(character: string): string {
 	return `U+${hex.padStart(4, "0")}`;
 }
 
-/** Shows a JSON value as the user wrote it, e.g. `1.2`, `"0.5"`, `NaN`. */
-function show(value: unknown): string {
-	return typeof value === "number"
-		? String(value)
-		: (JSON.stringify(value) ?? String(value));
+/**
+ * Shows a JSON value as the user wrote it, e.g. `1.2`, `"0.5"`, `NaN`, safe to print: every message that quotes the
+ * input quotes it with this.
+ */
+export function show(value: unknown): string {
+	return escapeUnsafeToPrint(
+		typeof value === "number"
+			? String(value)
+			: (JSON.stringify(value) ?? String(value)),
+	);
+}
+
+/**
+ * `text` with each character unsafe to print as `\uXXXX`, as JSON escapes them: `\u001b` for escape, `\udb40\udc01`
+ * beyond U+FFFF.
+ */
+export function escapeUnsafeToPrint(text: string): string {
+	return text.replace(new RegExp(UNSAFE_TO_PRINT, "gu"), (character) =>
+		character
+			.split("") // UTF-16 code units
+			.map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
+			.join(""),
+	);
 }

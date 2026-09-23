@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { fontFiles, uncovered } from "./font.ts";
-import { codePoint, type HillChart, HillChartError } from "./input.ts";
+import { codePoint, type HillChart, HillChartError, show } from "./input.ts";
 import type { Box } from "./layout.ts";
 
 type Resvg = typeof import("@resvg/resvg-wasm").Resvg;
@@ -69,7 +69,7 @@ function checkCoverage(chart: HillChart): void {
 		const missing = uncovered(text ?? "");
 		if (missing.length > 0) {
 			const characters = missing
-				.map((char) => `${JSON.stringify(char)} (${codePoint(char)})`)
+				.map((char) => `${show(char)} (${codePoint(char)})`)
 				.join(", ");
 			throw new HillChartError(
 				field,

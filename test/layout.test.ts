@@ -439,4 +439,11 @@ describe("layout", () => {
 	test("has no title block without a title", () => {
 		assert.equal(layout(fixture("extremes"), theme).title, undefined);
 	});
+
+	test("lays out a name of 400,000 one-letter words, one per line", () => {
+		const name = Array(400_000).fill("a").join(" ");
+		const narrow = readTheme({ width: 200, fontSize: 96 });
+		const { scopes } = layout({ scopes: [{ name, position: 0.5 }] }, narrow);
+		assert.equal(scopes[0].name.lines.length, 400_000);
+	});
 });

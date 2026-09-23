@@ -248,7 +248,7 @@ function textBlock(
 ): TextBlock {
 	const lineHeight = LINE_HEIGHT * size;
 	const width =
-		TEXT_ROOM * Math.max(...lines.map((line) => measure(line, weight, size)));
+		TEXT_ROOM * largest(lines.map((line) => measure(line, weight, size)));
 	const height = lines.length * lineHeight;
 	const top = middle - height / 2;
 	return {
@@ -294,11 +294,21 @@ function overlaps(a: Box, b: Box): boolean {
 }
 
 function boundingBox(boxes: Box[]): Box {
-	const left = Math.min(...boxes.map((b) => b.x));
-	const top = Math.min(...boxes.map((b) => b.y));
-	const right = Math.max(...boxes.map((b) => b.x + b.width));
-	const bottom = Math.max(...boxes.map((b) => b.y + b.height));
+	const left = smallest(boxes.map((b) => b.x));
+	const top = smallest(boxes.map((b) => b.y));
+	const right = largest(boxes.map((b) => b.x + b.width));
+	const bottom = largest(boxes.map((b) => b.y + b.height));
 	return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/** The smallest of `numbers`, not empty. Spreading a long array into `Math.min` would overflow the stack. */
+function smallest(numbers: number[]): number {
+	return numbers.reduce((a, b) => Math.min(a, b));
+}
+
+/** The largest of `numbers`, not empty. Spreading a long array into `Math.max` would overflow the stack. */
+function largest(numbers: number[]): number {
+	return numbers.reduce((a, b) => Math.max(a, b));
 }
 
 function grow(box: Box, margin: number): Box {

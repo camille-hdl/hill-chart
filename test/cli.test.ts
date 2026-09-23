@@ -111,6 +111,14 @@ describe("run", () => {
 		assert.ok(stderr.startsWith(`hill-chart: ${path}: invalid JSON: `), stderr);
 	});
 
+	test("escapes the control characters Node's invalid JSON message quotes from the input", async () => {
+		const path = tempFile("escape.json", "x\u001b]0;PWN\u0007");
+		const { code, stderr } = await runCli([path]);
+		assert.equal(code, 1);
+		assert.ok(stderr.includes('"x\\u001b]0;PWN\\u0007"'), stderr);
+		assert.doesNotMatch(stderr.replace(/\n$/, ""), /[\p{C}\u2028\u2029]/u);
+	});
+
 	const invalidData: [string, string][] = [
 		[
 			"label",
@@ -251,6 +259,21 @@ describe("run", () => {
 		const { code, stderr } = await runCli([samplePath, "--theme", path]);
 		assert.equal(code, 1);
 		assert.ok(stderr.startsWith(`hill-chart: ${path}: theme[""]: `), stderr);
+	});
+
+	test("names the theme file on a theme key with an escape character", async () => {
+		const path = tempFile(
+			"escape-key-theme.json",
+			'{"\\u001b]0;PWN\\u0007":1}',
+		);
+		const { code, stderr } = await runCli([samplePath, "--theme", path]);
+		assert.equal(code, 1);
+		assert.ok(
+			stderr.startsWith(
+				`hill-chart: ${path}: theme["\\u001b]0;PWN\\u0007"]: unknown key`,
+			),
+			stderr,
+		);
 	});
 
 	test("names the data file on invalid data with a valid theme", async () => {
