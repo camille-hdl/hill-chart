@@ -108,13 +108,23 @@ function axisPath(
 	return smooth(points);
 }
 
-/** The hill in HILL_PASSES slightly offset strokes, each through the same few samples. */
+/**
+ * The hill in HILL_PASSES slightly offset strokes, each through the same few samples. The passes join at both feet:
+ * only the samples in between are wobbled.
+ */
 function hillPath(samples: Point[], em: number, random: Random): string {
 	const controls = samples.filter(
 		(_, i) => i % HILL_STEP === 0 || i === samples.length - 1,
 	);
+	const [foot, finish] = [controls[0], controls[controls.length - 1]];
 	return Array.from({ length: HILL_PASSES }, () =>
-		smooth(controls.map((point) => shake(point, HILL_WOBBLE * em, random))),
+		smooth([
+			foot,
+			...controls
+				.slice(1, -1)
+				.map((point) => shake(point, HILL_WOBBLE * em, random)),
+			finish,
+		]),
 	).join(" ");
 }
 

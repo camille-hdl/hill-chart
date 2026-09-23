@@ -189,6 +189,18 @@ describe("renderSvg", () => {
 		);
 	});
 
+	test("joins the hill's passes at both feet", () => {
+		const passes = (hill(renderSvg(fixture("sample"))) ?? "")
+			.split("M")
+			.slice(1)
+			.map((pass) => pass.trim().split(" "));
+		assert.equal(passes.length, 2);
+		const [first, second] = passes;
+		assert.equal(second[0], first[0]);
+		assert.equal(second.at(-1), first.at(-1));
+		assert.notDeepEqual(second, first);
+	});
+
 	test("draws a different hill with another seed", () => {
 		const chart = fixture("sample");
 		assert.notEqual(
