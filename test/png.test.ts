@@ -113,7 +113,7 @@ describe("renderPng", () => {
 			name: "HillChartError",
 			field: "(root)",
 			message:
-				"(root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead",
+				"(root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, fewer scopes, a smaller theme.fontSize or theme.width, or render SVG instead",
 		});
 	});
 
@@ -128,7 +128,7 @@ describe("renderPng", () => {
 	test("checks the embedded font before the size", async () => {
 		await assert.rejects(
 			renderPng({ ...oversized, title: `${oversized.title} ✓` }, largeText),
-			{ field: "title" },
+			{ field: "title", message: /characters not in the embedded font: "✓"/ },
 		);
 	});
 
@@ -171,7 +171,7 @@ describe("the rasterizer", () => {
 		assert.deepEqual(JSON.parse(child.stdout), [
 			true,
 			'HillChartError: scopes[0].name: characters not in the embedded font: "Ж" (U+0416); render SVG instead',
-			"HillChartError: (root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead",
+			"HillChartError: (root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, fewer scopes, a smaller theme.fontSize or theme.width, or render SVG instead",
 			"Error: resvg loaded",
 		]);
 	});

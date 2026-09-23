@@ -547,7 +547,7 @@ describe("run, on PNG output", () => {
 		assert.deepEqual(await runCli([input, "--theme", theme, "-o", output]), {
 			code: 1,
 			stdout: "",
-			stderr: `hill-chart: ${input}: (root): PNG of 61626 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead\n`,
+			stderr: `hill-chart: ${input}: (root): PNG of 61626 × 1416 pixels is over the 50-megapixel limit; use shorter texts, fewer scopes, a smaller theme.fontSize or theme.width, or render SVG instead\n`,
 		});
 		assert.equal(existsSync(output), false);
 	});

@@ -86,7 +86,7 @@ function checkPixelCount(viewBox: Box): void {
 	if (width * height > PIXEL_LIMIT) {
 		throw new HillChartError(
 			"(root)",
-			`PNG of ${width} × ${height} pixels is over the ${PIXEL_LIMIT / 1_000_000}-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead`,
+			`PNG of ${width} × ${height} pixels is over the ${PIXEL_LIMIT / 1_000_000}-megapixel limit; use shorter texts, fewer scopes, a smaller theme.fontSize or theme.width, or render SVG instead`,
 		);
 	}
 }

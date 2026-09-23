@@ -138,8 +138,8 @@ and every other dot drawn exactly the same, though names may shift to make room 
 - **PNG** is drawn with the embedded font, [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/),
   and nothing else, so it looks the same on every machine. It covers Latin, including extended Latin such as “Łódź” or
   “İstanbul”. Greek, Cyrillic, CJK, emoji and symbols such as ✓ are not covered: the PNG fails with an error naming the
-  field and the characters. Use SVG for those. A PNG also fails, with field `(root)`, beyond 50 megapixels (a
-  7,000 × 7,000 px image), which only very long texts at a large `fontSize` reach.
+  field and the characters. Use SVG for those. A PNG over 50 megapixels (7,000 × 7,000 px) fails too, with field
+  `(root)`; the image at the top stays under it even with the theme `{ "width": 4000, "fontSize": 96 }`.
 - **SVG** uses the viewer's fonts.
 
 ## Requirements
