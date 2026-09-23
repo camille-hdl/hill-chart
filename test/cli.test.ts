@@ -377,6 +377,24 @@ describe("run", () => {
 		});
 	});
 
+	test("ignores a byte order mark at the start of the data file", async () => {
+		const path = tempFile("bom.json", `﻿${sampleJson}`);
+		assert.deepEqual(await runCli([path]), {
+			code: 0,
+			stdout: sampleSvg,
+			stderr: "",
+		});
+	});
+
+	test("ignores a byte order mark at the start of the theme file", async () => {
+		const theme = tempFile("bom-theme.json", '﻿{"background":"transparent"}');
+		assert.deepEqual(await runCli([samplePath, "--theme", theme]), {
+			code: 0,
+			stdout: renderSvg(JSON.parse(sampleJson), { background: "transparent" }),
+			stderr: "",
+		});
+	});
+
 	test("exits 2 on a file it cannot read", async () => {
 		const path = join(dir, "does-not-exist.json");
 		const { code, stdout, stderr } = await runCli([path]);

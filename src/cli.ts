@@ -188,7 +188,10 @@ async function readLimited(
 		const bytes = Buffer.from(chunk);
 		size += bytes.length;
 		if (size > MAX_INPUT_BYTES)
-			throw new Failure(`${source}: larger than the 1 MiB input limit`, 1);
+			throw new Failure(
+				`${source}: larger than the ${MAX_INPUT_BYTES / 1024 / 1024} MiB input limit`,
+				1,
+			);
 		chunks.push(bytes);
 	}
 	return new TextDecoder().decode(Buffer.concat(chunks));
