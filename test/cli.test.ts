@@ -32,9 +32,9 @@ function tempFile(name: string, content: string): string {
 }
 
 /** Runs the CLI with fake streams, `stdin` holding the given text. */
-async function runCli(args: string[], stdin = "") {
+async function runCli(args: string[], stdin = "", stdinIsTTY = false) {
 	const io = {
-		stdin: Object.assign(new PassThrough(), { isTTY: false }),
+		stdin: Object.assign(new PassThrough(), { isTTY: stdinIsTTY }),
 		stdout: Object.assign(new PassThrough(), { isTTY: false }),
 		stderr: new PassThrough(),
 	};
@@ -287,6 +287,17 @@ describe("run", () => {
 		assert.match(stderr, /^hill-chart: cannot read \S+no-theme\.json: .+\n$/);
 	});
 
+	test("exits 2 on an -o file it cannot write", async () => {
+		const output = join(dir, "no-such-dir", "chart.svg");
+		const { code, stdout, stderr } = await runCli([samplePath, "-o", output]);
+		assert.equal(code, 2);
+		assert.equal(stdout, "");
+		assert.equal(
+			stderr,
+			`hill-chart: cannot write ${output}: no such file or directory\n`,
+		);
+	});
+
 	test("exits 2 on a file it cannot read", async () => {
 		const path = join(dir, "does-not-exist.json");
 		const { code, stdout, stderr } = await runCli([path]);
@@ -296,6 +307,67 @@ describe("run", () => {
 			stderr,
 			/^hill-chart: cannot read \S+does-not-exist\.json: .+\n$/,
 		);
+	});
+});
+
+describe("run, on help, version and usage errors", () => {
+	for (const flag of ["--help", "-h"]) {
+		test(`prints the help on stdout with ${flag}`, async () => {
+			const { code, stdout, stderr } = await runCli([flag]);
+			assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
+			assert.match(stdout, /^Usage: hill-chart \[input\.json\|-\]/);
+			for (const option of [
+				"-o, --output",
+				"--theme",
+				"-h, --help",
+				"--version",
+			]) {
+				assert.ok(stdout.includes(option), option);
+			}
+			assert.match(stdout, /\nExamples:\n/);
+			assert.match(stdout, /\nExit codes:\n +0 .+\n +1 .+\n +2 .+\n$/);
+		});
+	}
+
+	test("prints the bare version from package.json with --version", async () => {
+		const { version } = JSON.parse(
+			readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+		);
+		assert.deepEqual(await runCli(["--version"]), {
+			code: 0,
+			stdout: `${version}\n`,
+			stderr: "",
+		});
+	});
+
+	const usageErrors: [string, string[]][] = [
+		["an unknown option", ["--nope"]],
+		["a missing option value", [samplePath, "-o"]],
+		["a second positional argument", ["a.json", "b.json"]],
+	];
+
+	for (const [name, args] of usageErrors) {
+		test(`exits 2 on ${name}, pointing to --help`, async () => {
+			const { code, stdout, stderr } = await runCli(args, sampleJson);
+			assert.deepEqual({ code, stdout }, { code: 2, stdout: "" });
+			assert.match(stderr, /^hill-chart: \S.*\nTry hill-chart --help\n$/);
+		});
+	}
+
+	test("prints the help on stderr and exits 2 when given no file and stdin is a terminal", async () => {
+		const [{ stdout: help }, noFile] = await Promise.all([
+			runCli(["--help"]),
+			runCli([], sampleJson, true),
+		]);
+		assert.deepEqual(noFile, { code: 2, stdout: "", stderr: help });
+	});
+
+	test('reads stdin when given "-", even when stdin is a terminal', async () => {
+		assert.deepEqual(await runCli(["-"], sampleJson, true), {
+			code: 0,
+			stdout: sampleSvg,
+			stderr: "",
+		});
 	});
 });
 
