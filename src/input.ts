@@ -231,7 +231,8 @@ function readText(text: unknown, field: string, whenEmpty: string): string {
 	}
 	const normalized = text.normalize("NFC").replace(/\s+/g, " ").trim();
 	if (normalized === "") throw new HillChartError(field, whenEmpty);
-	const length = [...normalized].length; // in code points, as drawn
+	let length = 0;
+	for (const _ of normalized) length++; // in code points, as drawn, without allocating
 	if (length > MAX_TEXT_LENGTH) {
 		throw new HillChartError(
 			field,
