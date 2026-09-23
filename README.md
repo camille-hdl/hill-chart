@@ -169,7 +169,9 @@ npm version minor      # or patch, or major
 git push --follow-tags
 ```
 
-The tag's workflow publishes to npm with provenance and creates the GitHub release.
+The tag's workflow runs three jobs. `build` checks the tag, runs the checks and packs the tarball; `publish`, in the
+`npm` environment, publishes that tarball to npm with provenance, with none of the repository's code; `github-release`
+creates the GitHub release.
 
 ## License
 
