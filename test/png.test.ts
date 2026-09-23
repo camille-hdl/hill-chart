@@ -104,13 +104,45 @@ describe("renderPng", () => {
 		);
 	});
 
+	// 114 W make a 35292 × 1416 px PNG, just under the limit: 49,973,472 pixels.
+	const oversized: HillChart = { title: "W".repeat(115), scopes: [] };
+	const largeText = { fontSize: 96 };
+
+	test("refuses a PNG over 50 megapixels, giving its size and the limit, and suggesting SVG", async () => {
+		await assert.rejects(renderPng(oversized, largeText), {
+			name: "HillChartError",
+			field: "(root)",
+			message:
+				"(root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead",
+		});
+	});
+
+	test("still draws the sample at the widest theme", async () => {
+		const png = await renderPng(fixture("sample"), {
+			width: 4000,
+			fontSize: 96,
+		});
+		assert.deepEqual(pngSize(png), { width: 9746, height: 4032 });
+	});
+
+	test("checks the embedded font before the size", async () => {
+		await assert.rejects(
+			renderPng({ ...oversized, title: `${oversized.title} ✓` }, largeText),
+			{ field: "title" },
+		);
+	});
+
+	test("still draws the SVG of a chart too large for a PNG", () => {
+		assert.match(renderSvg(oversized, largeText), /^<svg /);
+	});
+
 	test("still leaves uncovered text to the SVG", () => {
 		assert.match(renderSvg(fixture("uncovered")), />Reactions 👍 and ✓ marks</);
 	});
 });
 
 describe("the rasterizer", () => {
-	test("is never loaded to draw an SVG, nor to refuse uncovered text", () => {
+	test("is never loaded to draw an SVG, nor to refuse uncovered text or a PNG over the limit", () => {
 		// Runs in a fresh process, where resolving @resvg/resvg-wasm throws.
 		const script = `
 			import { registerHooks } from "node:module";
@@ -126,6 +158,7 @@ describe("the rasterizer", () => {
 			console.log(JSON.stringify([
 				renderSvg(chart).startsWith("<svg "),
 				await outcome(renderPng({ scopes: [{ name: "Ж", position: 0.3 }] })),
+				await outcome(renderPng({ title: "W".repeat(115), scopes: [] }, { fontSize: 96 })),
 				await outcome(renderPng(chart)),
 			]));
 		`;
@@ -138,6 +171,7 @@ describe("the rasterizer", () => {
 		assert.deepEqual(JSON.parse(child.stdout), [
 			true,
 			'HillChartError: scopes[0].name: characters not in the embedded font: "Ж" (U+0416); render SVG instead',
+			"HillChartError: (root): PNG of 35598 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead",
 			"Error: resvg loaded",
 		]);
 	});

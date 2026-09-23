@@ -537,6 +537,21 @@ describe("run, on PNG output", () => {
 		assert.equal(existsSync(output), false);
 	});
 
+	test("exits 1 on a PNG over the pixel limit, naming the data file, and writes nothing", async () => {
+		const input = tempFile(
+			"oversized.json",
+			JSON.stringify({ title: "W".repeat(200), scopes: [] }),
+		);
+		const theme = tempFile("large-text.json", '{"fontSize":96}');
+		const output = join(dir, "oversized.png");
+		assert.deepEqual(await runCli([input, "--theme", theme, "-o", output]), {
+			code: 1,
+			stdout: "",
+			stderr: `hill-chart: ${input}: (root): PNG of 61626 × 1416 pixels is over the 50-megapixel limit; use shorter texts, a smaller theme.fontSize or theme.width, or render SVG instead\n`,
+		});
+		assert.equal(existsSync(output), false);
+	});
+
 	test("still prints the SVG of a name the embedded font does not cover", async () => {
 		const { code, stdout, stderr } = await runCli([uncoveredPath]);
 		assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
