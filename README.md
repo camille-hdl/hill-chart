@@ -43,6 +43,8 @@ The rules:
 - `title` and `subtitle` are optional. No date is added: put it in `subtitle` if you want one.
 - A chart has at most 100 scopes, and a title, subtitle or name at most 200 characters, counted after whitespace is
   collapsed. The CLI reads at most 1 MiB of JSON from a file or stdin.
+- A chart within these limits can still be too large for a PNG, for instance with many long names at the same position.
+  A PNG over 50 megapixels fails with an error giving its width and height in pixels; render SVG instead.
 
 Any other key is an error, and every error names its field:
 
