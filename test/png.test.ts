@@ -30,6 +30,11 @@ function viewBoxSize(svg: string): { width: number; height: number } {
 	return { width: Number(width), height: Number(height) };
 }
 
+/** Compares bytes without `deepEqual`, whose diff of two large buffers takes minutes. */
+function assertSameBytes(actual: Uint8Array, expected: Uint8Array) {
+	assert.ok(Buffer.compare(actual, expected) === 0, "the bytes differ");
+}
+
 describe("renderPng", () => {
 	// First in the file, so that both calls race to initialize the rasterizer: each test file runs in its own process.
 	test("shares one rasterizer initialization between concurrent calls", async () => {
@@ -38,7 +43,7 @@ describe("renderPng", () => {
 			renderPng(chart),
 			renderPng(chart),
 		]);
-		assert.deepEqual(first, second);
+		assertSameBytes(first, second);
 	});
 
 	test("draws a PNG twice the size of the SVG's viewBox", async () => {
@@ -52,7 +57,7 @@ describe("renderPng", () => {
 
 	test("draws the same bytes on every render", async () => {
 		const chart = fixture("crowded");
-		assert.deepEqual(await renderPng(chart), await renderPng(chart));
+		assertSameBytes(await renderPng(chart), await renderPng(chart));
 	});
 
 	test("refuses the first name the embedded font does not cover, citing each character and suggesting SVG", async () => {

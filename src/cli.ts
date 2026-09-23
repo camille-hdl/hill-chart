@@ -1,9 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { text } from "node:stream/consumers";
 import { getSystemErrorMessage, parseArgs } from "node:util";
 import {
 	type HillChart,
 	HillChartError,
+	renderPng,
 	renderSvg,
 	type Theme,
 } from "./index.ts";
@@ -14,25 +16,30 @@ export type Io = {
 	stderr: NodeJS.WritableStream;
 };
 
-const help = `Usage: hill-chart [input.json|-] [-o out.svg] [--theme theme.json]
+const help = `Usage: hill-chart [input.json|-] [-o out.svg|out.png] [--format svg|png] [--theme theme.json]
 
-Draws a hill chart as SVG from a JSON description of a project's scopes.
+Draws a hill chart as SVG or PNG from a JSON description of a project's scopes.
 Reads stdin when given no input file, or "-".
 
 Options:
-  -o, --output <file>  write the SVG to <file> instead of stdout
+  -o, --output <file>  write to <file> instead of stdout, as SVG or PNG by its extension
+      --format <fmt>   svg (default) or png; a PNG goes to stdout only when it is not a terminal
       --theme <file>   apply a partial theme read from a JSON file
   -h, --help           print this help
       --version        print the version
 
+A PNG is twice the SVG's size and drawn with the embedded font only, so it looks the same on every
+machine; text in a script the font lacks (Greek, Cyrillic, CJK, emoji) fails, and needs SVG.
+
 Examples:
   hill-chart chart.json > chart.svg
-  hill-chart chart.json -o chart.svg --theme theme.json
+  hill-chart chart.json -o chart.png --theme theme.json
+  hill-chart chart.json --format png > chart.png
   cat chart.json | hill-chart -o chart.svg
 
 Exit codes:
   0  success
-  1  invalid JSON, data or theme; the message names the file, and the field when there is one
+  1  invalid JSON, data or theme, or text a PNG cannot draw; the message names the file, and the field when there is one
   2  usage error, or a file that cannot be read or written
 `;
 
@@ -58,6 +65,12 @@ export async function run(args: string[], io: Io): Promise<number> {
 			io.stdout.write(`${await packageVersion()}\n`);
 			return 0;
 		}
+		const format = outputFormat(values.output, values.format);
+		if (format === "png" && values.output === undefined && io.stdout.isTTY)
+			throw new Failure(
+				"refusing to write PNG to a terminal; use -o chart.png or redirect",
+				2,
+			);
 		if (positionals.length === 0 && io.stdin.isTTY) {
 			// Waiting for someone to type JSON would look like a hang.
 			io.stderr.write(help);
@@ -73,9 +86,9 @@ export async function run(args: string[], io: Io): Promise<number> {
 						theme: parseJson(await readFileText(values.theme), values.theme),
 						path: values.theme,
 					};
-		const svg = draw(data, source, themeFile);
-		if (values.output === undefined) io.stdout.write(svg);
-		else await writeFileText(values.output, svg);
+		const image = await draw(data, source, format, themeFile);
+		if (values.output === undefined) io.stdout.write(image);
+		else await writeOutput(values.output, image);
 		return 0;
 	} catch (error) {
 		if (!(error instanceof Failure)) throw error;
@@ -86,6 +99,7 @@ export async function run(args: string[], io: Io): Promise<number> {
 
 const options = {
 	output: { type: "string", short: "o" },
+	format: { type: "string" },
 	theme: { type: "string" },
 	help: { type: "boolean", short: "h" },
 	version: { type: "boolean" },
@@ -111,6 +125,32 @@ function parseStrictly(args: string[]) {
 	}
 }
 
+type Format = "svg" | "png";
+
+/** The format to write: the extension of `output` decides, otherwise `format`, otherwise SVG. */
+function outputFormat(
+	output: string | undefined,
+	format: string | undefined,
+): Format {
+	if (format !== undefined && !isFormat(format))
+		throw usageError(
+			`unknown format ${JSON.stringify(format)}; use svg or png`,
+		);
+	if (output === undefined) return format ?? "svg";
+	const extension = extname(output).slice(1).toLowerCase();
+	if (!isFormat(extension))
+		throw usageError(
+			`cannot tell the format of ${output}; name it .svg or .png`,
+		);
+	if (format !== undefined && format !== extension)
+		throw usageError(`--format ${format} contradicts ${output}`);
+	return extension;
+}
+
+function isFormat(name: string): name is Format {
+	return name === "svg" || name === "png";
+}
+
 function usageError(message: string): Failure {
 	return new Failure(`${message}\nTry hill-chart --help`, 2);
 }
@@ -133,7 +173,10 @@ async function readFileText(path: string): Promise<string> {
 	}
 }
 
-async function writeFileText(path: string, content: string): Promise<void> {
+async function writeOutput(
+	path: string,
+	content: string | Uint8Array,
+): Promise<void> {
 	try {
 		await writeFile(path, content);
 	} catch (error) {
@@ -152,15 +195,23 @@ function parseJson(json: string, source: string): unknown {
 	}
 }
 
-/** Draws `data`, read from `source`, with the theme of `themeFile`, and reports each error against the file it comes from. */
-function draw(
+/**
+ * Draws `data`, read from `source`, in `format` with the theme of `themeFile`, and reports each error against the file
+ * it comes from.
+ */
+async function draw(
 	data: unknown,
 	source: string,
+	format: Format,
 	themeFile?: { theme: unknown; path: string },
-): string {
+): Promise<string | Uint8Array> {
 	try {
-		// renderSvg validates its input at runtime: data read from JSON is safe to pass as is.
-		return renderSvg(data as HillChart, themeFile?.theme as Partial<Theme>);
+		// Both render functions validate their input at runtime: data read from JSON is safe to pass as is.
+		const chart = data as HillChart;
+		const theme = themeFile?.theme as Partial<Theme>;
+		return format === "png"
+			? await renderPng(chart, theme)
+			: renderSvg(chart, theme);
 	} catch (error) {
 		if (error instanceof HillChartError) {
 			// Theme fields: `theme`, `theme.dot`, or `theme[""]` for a key a dot would garble.

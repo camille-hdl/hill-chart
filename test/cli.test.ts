@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
 	closeSync,
+	existsSync,
 	mkdtempSync,
 	openSync,
 	readFileSync,
@@ -14,13 +15,14 @@ import { PassThrough } from "node:stream";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { run } from "../src/cli.ts";
-import { renderSvg } from "../src/index.ts";
+import { renderPng, renderSvg } from "../src/index.ts";
 
 const samplePath = fileURLToPath(
 	new URL("fixtures/sample.json", import.meta.url),
 );
 const sampleJson = readFileSync(samplePath, "utf8");
 const sampleSvg = renderSvg(JSON.parse(sampleJson));
+const samplePng = await renderPng(JSON.parse(sampleJson));
 
 const dir = mkdtempSync(join(tmpdir(), "hill-chart-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -31,17 +33,39 @@ function tempFile(name: string, content: string): string {
 	return path;
 }
 
-/** Runs the CLI with fake streams, `stdin` holding the given text. */
-async function runCli(args: string[], stdin = "", stdinIsTTY = false) {
+/** Runs the CLI with fake streams, `stdin` holding the given text, and returns what it wrote as bytes. */
+async function runCliBytes(
+	args: string[],
+	stdin = "",
+	stdinIsTTY = false,
+	stdoutIsTTY = false,
+) {
 	const io = {
 		stdin: Object.assign(new PassThrough(), { isTTY: stdinIsTTY }),
-		stdout: Object.assign(new PassThrough(), { isTTY: false }),
+		stdout: Object.assign(new PassThrough(), { isTTY: stdoutIsTTY }),
 		stderr: new PassThrough(),
 	};
 	io.stdin.end(stdin);
 	const code = await run(args, io);
-	const read = (stream: PassThrough) => stream.read()?.toString() ?? "";
+	const read = (stream: PassThrough): Buffer =>
+		stream.read() ?? Buffer.alloc(0);
 	return { code, stdout: read(io.stdout), stderr: read(io.stderr) };
+}
+
+/** Runs the CLI with fake streams, `stdin` holding the given text, and returns what it wrote as text. */
+async function runCli(
+	args: string[],
+	stdin = "",
+	stdinIsTTY = false,
+	stdoutIsTTY = false,
+) {
+	const { code, stdout, stderr } = await runCliBytes(
+		args,
+		stdin,
+		stdinIsTTY,
+		stdoutIsTTY,
+	);
+	return { code, stdout: stdout.toString(), stderr: stderr.toString() };
 }
 
 describe("run", () => {
@@ -319,13 +343,15 @@ describe("run, on help, version and usage errors", () => {
 			assert.match(stdout, /^Usage: hill-chart \[input\.json\|-\]/);
 			for (const option of [
 				"-o, --output",
+				"--format",
 				"--theme",
 				"-h, --help",
 				"--version",
 			]) {
 				assert.ok(stdout.includes(option), option);
 			}
-			assert.match(stdout, /\nExamples:\n/);
+			assert.match(stdout, /^Usage: .*\[--format svg\|png\]/);
+			assert.match(stdout, /\nExamples:\n(.+\n)*.*-o chart\.png/);
 			assert.match(stdout, /\nExit codes:\n +0 .+\n +1 .+\n +2 .+\n$/);
 			assert.match(stdout, /\n +1 .+, and the field when there is one\n/);
 		});
@@ -384,6 +410,145 @@ describe("run, on help, version and usage errors", () => {
 			stdout: sampleSvg,
 			stderr: "",
 		});
+	});
+});
+
+/** Compares bytes without `deepEqual`, whose diff of two large buffers takes minutes. */
+function assertSamePng(actual: Uint8Array) {
+	assert.ok(
+		Buffer.compare(actual, samplePng) === 0,
+		`not the PNG of the sample: ${actual.length} bytes, expected ${samplePng.length}`,
+	);
+}
+
+describe("run, on PNG output", () => {
+	test("writes a PNG to an -o file ending in .png", async () => {
+		const output = join(dir, "chart.png");
+		assert.deepEqual(await runCli([samplePath, "-o", output]), {
+			code: 0,
+			stdout: "",
+			stderr: "",
+		});
+		assertSamePng(readFileSync(output));
+	});
+
+	test("reads the -o extension regardless of case", async () => {
+		const output = join(dir, "CHART.PNG");
+		const { code } = await runCli([samplePath, "-o", output]);
+		assert.equal(code, 0);
+		assertSamePng(readFileSync(output));
+	});
+
+	const formatErrors: [string, string[], string][] = [
+		[
+			"an -o extension other than .svg or .png",
+			["-o", join(dir, "chart.txt")],
+			`cannot tell the format of ${join(dir, "chart.txt")}; name it .svg or .png`,
+		],
+		[
+			"an -o file without extension",
+			["-o", join(dir, "chart")],
+			`cannot tell the format of ${join(dir, "chart")}; name it .svg or .png`,
+		],
+		[
+			"an unknown --format",
+			["--format", "gif"],
+			'unknown format "gif"; use svg or png',
+		],
+		[
+			"a --format that contradicts -o",
+			["-o", join(dir, "contradiction.svg"), "--format", "png"],
+			`--format png contradicts ${join(dir, "contradiction.svg")}`,
+		],
+	];
+
+	for (const [name, args, message] of formatErrors) {
+		test(`exits 2 on ${name}, pointing to --help`, async () => {
+			assert.deepEqual(await runCli([samplePath, ...args]), {
+				code: 2,
+				stdout: "",
+				stderr: `hill-chart: ${message}\nTry hill-chart --help\n`,
+			});
+		});
+	}
+
+	test("prints the PNG with --format png when stdout is not a terminal", async () => {
+		const { code, stdout, stderr } = await runCliBytes([
+			samplePath,
+			"--format",
+			"png",
+		]);
+		assert.deepEqual(
+			{ code, stderr: stderr.toString() },
+			{ code: 0, stderr: "" },
+		);
+		assertSamePng(stdout);
+	});
+
+	test("refuses to print a PNG when stdout is a terminal", async () => {
+		assert.deepEqual(
+			await runCli([samplePath, "--format", "png"], "", false, true),
+			{
+				code: 2,
+				stdout: "",
+				stderr:
+					"hill-chart: refusing to write PNG to a terminal; use -o chart.png or redirect\n",
+			},
+		);
+	});
+
+	test("writes the PNG to -o even when stdout is a terminal", async () => {
+		const output = join(dir, "from-terminal.png");
+		const { code } = await runCli([samplePath, "-o", output], "", false, true);
+		assert.equal(code, 0);
+		assertSamePng(readFileSync(output));
+	});
+
+	test("accepts a --format that agrees with -o", async () => {
+		const output = join(dir, "agreed.png");
+		const { code } = await runCli([
+			samplePath,
+			"-o",
+			output,
+			"--format",
+			"png",
+		]);
+		assert.equal(code, 0);
+		assertSamePng(readFileSync(output));
+	});
+
+	test("prints the SVG with --format svg", async () => {
+		assert.deepEqual(await runCli([samplePath, "--format", "svg"]), {
+			code: 0,
+			stdout: sampleSvg,
+			stderr: "",
+		});
+	});
+
+	const uncoveredPath = fileURLToPath(
+		new URL("fixtures/uncovered.json", import.meta.url),
+	);
+
+	test("exits 1 on a name the embedded font does not cover, naming the file, and writes nothing", async () => {
+		const output = join(dir, "uncovered.png");
+		assert.deepEqual(await runCli([uncoveredPath, "-o", output]), {
+			code: 1,
+			stdout: "",
+			stderr: `hill-chart: ${uncoveredPath}: scopes[1].name: characters not in the embedded font: "👍" (U+1F44D), "✓" (U+2713); render SVG instead\n`,
+		});
+		assert.equal(existsSync(output), false);
+	});
+
+	test("still prints the SVG of a name the embedded font does not cover", async () => {
+		const { code, stdout, stderr } = await runCli([uncoveredPath]);
+		assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
+		assert.match(stdout, /^<svg /);
+	});
+
+	test("writes nothing to an -o file whose format is contradicted", async () => {
+		const output = join(dir, "not-written.svg");
+		await runCli([samplePath, "-o", output, "--format", "png"]);
+		assert.equal(existsSync(output), false);
 	});
 });
 
