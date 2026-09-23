@@ -43,7 +43,10 @@ const DOT_RADIUS = 0.45;
 const NAME_GAP = 0.5;
 /** Between a name and anything placed before it: another name, a dot, a leader line. */
 const CLEARANCE = 0.25;
-/** Between a name and the hill's centerline, which the drawn hill's ink strays from by up to 0.3 em (svg's Wobble and stroke). */
+/**
+ * Between a name and the hill's centerline. The drawn hill's ink (svg's Wobble and stroke) strays from it by up to about
+ * 0.24 em with the default theme, and 0.31 em on the widest hill with the smallest text (width 4000, fontSize 6).
+ */
 const HILL_CLEARANCE = 0.5;
 /** A name whose box has moved further than this from its dot's center, vertically, gets a leader line. */
 const LEADER_THRESHOLD = 1;

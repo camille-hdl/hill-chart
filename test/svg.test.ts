@@ -19,10 +19,19 @@ function title(svg: string): string | undefined {
 	return svg.match(/<title>(.*)<\/title>/)?.[1];
 }
 
-/** The `<g class="scope">` holding the name `name`. */
+/** Every `<g class="scope">`, in data order. */
+function groups(svg: string): string[] {
+	return svg.match(/<g class="scope">[\s\S]*?<\/g>/g) ?? [];
+}
+
+/** The `<g class="scope">` holding the one-line name `name`. */
 function group(svg: string, name: string): string | undefined {
-	const groups = svg.match(/<g class="scope">[\s\S]*?<\/g>/g) ?? [];
-	return groups.find((g) => g.includes(`>${name}<`));
+	return groups(svg).find((g) => g.includes(`>${name}<`));
+}
+
+/** The `d` of each scope's leader line, in data order; undefined for a scope without one. */
+function leaderPaths(svg: string): (string | undefined)[] {
+	return groups(svg).map((g) => g.match(/<path d="([^"]*)" fill="none"/)?.[1]);
 }
 
 /** The `d` of the hill: the last path drawn before the scopes. */
@@ -31,15 +40,17 @@ function hill(svg: string): string | undefined {
 	return [...beforeScopes.matchAll(/<path d="([^"]*)"/g)].at(-1)?.[1];
 }
 
+const fixtures = [
+	"sample",
+	"empty",
+	"extremes",
+	"crowded",
+	"long-names",
+	"title-subtitle",
+];
+
 describe("renderSvg", () => {
-	for (const name of [
-		"sample",
-		"empty",
-		"extremes",
-		"crowded",
-		"long-names",
-		"title-subtitle",
-	]) {
+	for (const name of fixtures) {
 		test(`draws the ${name} fixture as in its snapshot`, (t) => {
 			const path = fileURLToPath(
 				new URL(`snapshots/${name}.svg`, import.meta.url),
@@ -240,29 +251,51 @@ describe("renderSvg", () => {
 		assert.equal(dotOfB([b, a, c]), dot);
 	});
 
-	test("draws a leader line first in the group of a name that moved, in the muted color", () => {
-		const svg = renderSvg(fixture("crowded"), { muted: "#030303" });
-		const moved = group(svg, "Volunteer roster");
-		assert.match(
-			moved ?? "",
-			/^<g class="scope">\n {2}<path d="[^"]*" fill="none" stroke="#030303" [^>]*>\n {2}<path d="[^"]*" fill="#990f3d"\/>\n {2}<text /,
-		);
-		assert.doesNotMatch(group(svg, "Map") ?? "", /fill="none"/);
+	test("draws each leader line of the layout first in its scope's group, in the muted color", () => {
+		let drawn = 0;
+		for (const name of fixtures) {
+			const chart = fixture(name);
+			const { scopes } = layout(readChart(chart), readTheme(undefined));
+			const svg = renderSvg(chart, { muted: "#030303" });
+			for (const [i, g] of groups(svg).entries()) {
+				if (scopes[i].leader) {
+					drawn++;
+					assert.match(
+						g,
+						/^<g class="scope">\n {2}<path d="[^"]*" fill="none" stroke="#030303" [^>]*>\n {2}<path d="[^"]*" fill="#990f3d"\/>\n {2}<text /,
+						`${name}: ${scopes[i].scope.name}`,
+					);
+				} else {
+					assert.doesNotMatch(
+						g,
+						/fill="none"/,
+						`${name}: ${scopes[i].scope.name}`,
+					);
+				}
+			}
+		}
+		assert.ok(drawn > 0);
 	});
 
-	test("draws a scope's leader line the same whatever the order of the other scopes", () => {
-		const a = { name: "Plot map", position: 0.3 };
-		const b = { name: "Seed catalogue import", position: 0.31 };
-		const c = { name: "Login", position: 0.9 };
-		const leaderOfB = (scopes: HillChart["scopes"], seed?: number) =>
-			group(renderSvg({ scopes }, { seed }), b.name)?.match(
-				/<path d="([^"]*)" fill="none"/,
-			)?.[1];
-		const leader = leaderOfB([a, b]);
-		assert.ok(leader);
-		assert.equal(leaderOfB([c, a, b]), leader);
-		assert.equal(leaderOfB([b, c, a]), leader);
-		assert.notEqual(leaderOfB([a, b], 2), leader);
+	test("draws each leader line the same whatever the order of the scopes", () => {
+		// Moving the last scope first keeps every placement: names are placed from the lowest dot, ties in data order.
+		const chart = fixture("crowded");
+		const last = chart.scopes.at(-1);
+		assert.ok(last);
+		const reordered = {
+			...chart,
+			scopes: [last, ...chart.scopes.slice(0, -1)],
+		};
+		const leaders = leaderPaths(renderSvg(chart));
+		assert.ok(leaders.some((d) => d !== undefined));
+		assert.deepEqual(leaderPaths(renderSvg(reordered)), [
+			leaders.at(-1),
+			...leaders.slice(0, -1),
+		]);
+		const reseeded = leaderPaths(renderSvg(chart, { seed: 2 }));
+		for (const [i, d] of leaders.entries()) {
+			if (d !== undefined) assert.notEqual(reseeded[i], d);
+		}
 	});
 
 	test("keeps the drawn hill's ink within 0.3 em of the layout's hill, whatever the seed", () => {
