@@ -249,7 +249,7 @@ function keyPath(parent: string, key: string): string {
 }
 
 /** `U+0007` for the bell character. */
-function codePoint(character: string): string {
+export function codePoint(character: string): string {
 	const hex = (character.codePointAt(0) ?? 0).toString(16).toUpperCase();
 	return `U+${hex.padStart(4, "0")}`;
 }

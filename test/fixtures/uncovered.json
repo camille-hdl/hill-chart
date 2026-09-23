@@ -1,0 +1,9 @@
+{
+	"title": "Community garden planner",
+	"subtitle": "Week 12",
+	"scopes": [
+		{ "name": "Łódź allotments", "position": 0.3 },
+		{ "name": "Reactions 👍 and ✓ marks", "position": 0.6 },
+		{ "name": "Ж", "position": 0.8 }
+	]
+}
