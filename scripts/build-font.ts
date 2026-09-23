@@ -56,6 +56,8 @@ try {
 		hb("hb-subset", [
 			source,
 			"--unicodes=*",
+			// By default, only name IDs 0–6 survive: keep the license, its URL and the credits.
+			"--name-IDs=*",
 			`--instance=wght=${weight}`,
 			`--output-file=${instance}`,
 		]);
