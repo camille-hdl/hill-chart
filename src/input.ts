@@ -27,6 +27,12 @@ export class HillChartError extends Error {
 /** Characters left after normalization that XML 1.0 forbids: controls, U+FFFE, U+FFFF and lone surrogates. */
 const FORBIDDEN_IN_XML = /[\p{Cc}\p{Cs}\uFFFE\uFFFF]/u;
 
+/** The most characters a title, subtitle or name may have: enough for about 7 lines of a name, and a bounded heading. */
+const MAX_TEXT_LENGTH = 200;
+
+/** The most scopes a hill chart may have, which keeps placement, quadratic in their number, to a few milliseconds. */
+const MAX_SCOPES = 100;
+
 const DEFAULT_THEME: Theme = JSON.parse(
 	readFileSync(new URL("../default-theme.json", import.meta.url), "utf8"),
 );
@@ -104,6 +110,12 @@ function readThemeKey<K extends keyof Theme>(
 function readScopes(scopes: unknown): Scope[] {
 	if (!Array.isArray(scopes)) {
 		throw new HillChartError("scopes", "expected an array");
+	}
+	if (scopes.length > MAX_SCOPES) {
+		throw new HillChartError(
+			"scopes",
+			`must have at most ${MAX_SCOPES} scopes, got ${scopes.length}`,
+		);
 	}
 	const names = new Map<string, string>(); // name → field of the scope it names
 	// Array.from visits holes too, as undefined, where map would skip them.
@@ -212,13 +224,20 @@ function readColor(color: unknown, field: string, orElse = ""): string {
 	return color.toLowerCase();
 }
 
-/** Reads text as it will be drawn: in NFC, every run of whitespace as one space, trimmed, and not empty. */
+/** Reads text as it will be drawn: in NFC, every run of whitespace as one space, trimmed, not empty and not too long. */
 function readText(text: unknown, field: string, whenEmpty: string): string {
 	if (typeof text !== "string") {
 		throw new HillChartError(field, "expected a string");
 	}
 	const normalized = text.normalize("NFC").replace(/\s+/g, " ").trim();
 	if (normalized === "") throw new HillChartError(field, whenEmpty);
+	const length = [...normalized].length; // in code points, as drawn
+	if (length > MAX_TEXT_LENGTH) {
+		throw new HillChartError(
+			field,
+			`must be at most ${MAX_TEXT_LENGTH} characters, got ${length}`,
+		);
+	}
 	const control = normalized.match(FORBIDDEN_IN_XML)?.[0];
 	if (control !== undefined) {
 		throw new HillChartError(
