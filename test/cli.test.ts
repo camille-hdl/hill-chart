@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { run } from "../src/cli.ts";
@@ -315,6 +315,84 @@ describe("run", () => {
 			stderr,
 			`hill-chart: cannot write ${output}: no such file or directory\n`,
 		);
+	});
+
+	/** The JSON of the sample, padded with spaces to `size` bytes. */
+	const paddedSample = (size: number) =>
+		sampleJson.padEnd(size - Buffer.byteLength(sampleJson) + sampleJson.length);
+
+	const MiB = 1024 * 1024;
+
+	test("exits 1 on a file over 1 MiB, naming the file and the limit", async () => {
+		const path = tempFile("huge.json", paddedSample(MiB + 1));
+		assert.deepEqual(await runCli([path]), {
+			code: 1,
+			stdout: "",
+			stderr: `hill-chart: ${path}: larger than the 1 MiB input limit\n`,
+		});
+	});
+
+	test("prints the SVG of a file of exactly 1 MiB", async () => {
+		const path = tempFile("largest.json", paddedSample(MiB));
+		assert.deepEqual(await runCli([path]), {
+			code: 0,
+			stdout: sampleSvg,
+			stderr: "",
+		});
+	});
+
+	test("exits 1 on stdin over 1 MiB, naming <stdin>", async () => {
+		assert.deepEqual(await runCli(["-"], paddedSample(2 * MiB)), {
+			code: 1,
+			stdout: "",
+			stderr: "hill-chart: <stdin>: larger than the 1 MiB input limit\n",
+		});
+	});
+
+	test("stops reading stdin that never ends once past 1 MiB", async () => {
+		const spaces = Buffer.alloc(64 * 1024, " ");
+		const stderr = new PassThrough();
+		const code = await run([], {
+			stdin: Readable.from(
+				(function* () {
+					while (true) yield spaces;
+				})(),
+			),
+			stdout: new PassThrough(),
+			stderr,
+		});
+		assert.equal(code, 1);
+		assert.equal(
+			String(stderr.read()),
+			"hill-chart: <stdin>: larger than the 1 MiB input limit\n",
+		);
+	});
+
+	test("exits 1 on a theme file over 1 MiB, naming the theme file", async () => {
+		const path = tempFile("huge-theme.json", "{}".padEnd(2 * MiB));
+		assert.deepEqual(await runCli([samplePath, "--theme", path]), {
+			code: 1,
+			stdout: "",
+			stderr: `hill-chart: ${path}: larger than the 1 MiB input limit\n`,
+		});
+	});
+
+	test("ignores a byte order mark at the start of the data file", async () => {
+		const path = tempFile("bom.json", `﻿${sampleJson}`);
+		assert.deepEqual(await runCli([path]), {
+			code: 0,
+			stdout: sampleSvg,
+			stderr: "",
+		});
+	});
+
+	test("ignores a byte order mark at the start of the theme file", async () => {
+		const theme = tempFile("bom-theme.json", '﻿{"background":"transparent"}');
+		assert.deepEqual(await runCli([samplePath, "--theme", theme]), {
+			code: 0,
+			stdout: renderSvg(JSON.parse(sampleJson), { background: "transparent" }),
+			stderr: "",
+		});
 	});
 
 	test("exits 2 on a file it cannot read", async () => {

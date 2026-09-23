@@ -41,6 +41,10 @@ The rules:
 - A scope has only a `name` and a `position`, a number from 0 to 1.
 - Names are unique within the chart. Two scopes may share a position.
 - `title` and `subtitle` are optional. No date is added: put it in `subtitle` if you want one.
+- A chart has at most 100 scopes, and a title, subtitle or name at most 200 characters, counted after whitespace is
+  collapsed. The CLI reads at most 1 MiB of JSON from a file or stdin.
+- A chart within these limits can still be too large for a PNG, for instance with many long names at the same position.
+  A PNG over 50 megapixels fails with an error giving its width and height in pixels; render SVG instead.
 
 Any other key is an error, and every error names its field:
 
@@ -126,6 +130,8 @@ try {
 
 - `renderSvg(chart, theme?)` returns a string; `renderPng(chart, theme?)`, a `Promise<Uint8Array>`.
 - Both validate their input and throw a `HillChartError`, whose `field` is the path at fault.
+- They do not read files: the CLI's 1 MiB input limit is not theirs. A service that renders untrusted JSON sets its own
+  limit on the size it reads, before parsing.
 - The package is ESM only, and exports the `HillChart`, `Scope` and `Theme` types.
 
 ## Determinism

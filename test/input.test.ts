@@ -18,6 +18,14 @@ function deepFreeze<T>(value: T): T {
 	return value;
 }
 
+/** `count` valid scopes, named `Scope 1` to `Scope <count>`. */
+function scopes(count: number) {
+	return Array.from({ length: count }, (_, i) => ({
+		name: `Scope ${i + 1}`,
+		position: 0.3,
+	}));
+}
+
 describe("readChart", () => {
 	const valid: [string, unknown, HillChart][] = [
 		["no title and no scopes", { scopes: [] }, { scopes: [] }],
@@ -91,6 +99,30 @@ describe("readChart", () => {
 			{ scopes: [{ name: "Seed catalogue \u{1f331}", position: 0.3 }] },
 			{ scopes: [{ name: "Seed catalogue \u{1f331}", position: 0.3 }] },
 		],
+		["100 scopes", { scopes: scopes(100) }, { scopes: scopes(100) }],
+		[
+			"texts of 200 characters",
+			{
+				title: "W".repeat(200),
+				subtitle: "W".repeat(200),
+				scopes: [{ name: "W".repeat(200), position: 0.3 }],
+			},
+			{
+				title: "W".repeat(200),
+				subtitle: "W".repeat(200),
+				scopes: [{ name: "W".repeat(200), position: 0.3 }],
+			},
+		],
+		[
+			"a name of 200 characters outside the Basic Multilingual Plane, counted as characters",
+			{ scopes: [{ name: "\u{1f331}".repeat(200), position: 0.3 }] },
+			{ scopes: [{ name: "\u{1f331}".repeat(200), position: 0.3 }] },
+		],
+		[
+			"a subtitle of 200 characters once normalized",
+			{ subtitle: ` ${"e\u0301".repeat(200)}\n`, scopes: [] },
+			{ subtitle: "\u00e9".repeat(200), scopes: [] },
+		],
 		[
 			"objects without a prototype",
 			Object.assign(Object.create(null), {
@@ -142,6 +174,24 @@ describe("readChart", () => {
 		["a missing scopes array", {}, "scopes", /required/],
 		["scopes that are not an array", { scopes: {} }, "scopes", /array/],
 		["a scope that is not an object", { scopes: [1] }, "scopes[0]", /object/],
+		[
+			"101 scopes",
+			{ scopes: scopes(101) },
+			"scopes",
+			/^scopes: must have at most 100 scopes, got 101$/,
+		],
+		[
+			"101 scopes, before an invalid scope further in the array",
+			{ scopes: [...scopes(100), { name: "", position: 2 }] },
+			"scopes",
+			/got 101$/,
+		],
+		[
+			"101 scopes before an invalid title, in document order",
+			{ scopes: scopes(101), title: 1 },
+			"scopes",
+			/got 101$/,
+		],
 		[
 			"an empty name",
 			{ scopes: [{ name: "", position: 0.5 }] },
@@ -220,6 +270,24 @@ describe("readChart", () => {
 			{ title: "", scopes: [] },
 			"title",
 			/^title: must not be empty \(omit it instead\)$/,
+		],
+		[
+			"a title of 201 characters",
+			{ title: "W".repeat(201), scopes: [] },
+			"title",
+			/^title: must be at most 200 characters, got 201$/,
+		],
+		[
+			"a subtitle of 201 characters",
+			{ subtitle: "W".repeat(201), scopes: [] },
+			"subtitle",
+			/^subtitle: must be at most 200 characters, got 201$/,
+		],
+		[
+			"a name of 201 characters outside the Basic Multilingual Plane",
+			{ scopes: [{ name: "\u{1f331}".repeat(201), position: 0.3 }] },
+			"scopes[0].name",
+			/^scopes\[0\]\.name: must be at most 200 characters, got 201$/,
 		],
 		[
 			"a non-string subtitle",
@@ -418,6 +486,17 @@ describe("renderSvg", () => {
 			(error) => {
 				assert.ok(error instanceof HillChartError);
 				assert.equal(error.field, "scopes[0].position");
+				return true;
+			},
+		);
+	});
+
+	test("throws the HillChartError of a title too long", () => {
+		assert.throws(
+			() => renderSvg({ title: "W".repeat(201), scopes: [] }),
+			(error) => {
+				assert.ok(error instanceof HillChartError);
+				assert.equal(error.field, "title");
 				return true;
 			},
 		);
