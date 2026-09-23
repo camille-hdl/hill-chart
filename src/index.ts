@@ -12,9 +12,7 @@ export {
 
 /** Draws a hill chart as an SVG document. Throws `HillChartError` on invalid data or theme. */
 export function renderSvg(chart: HillChart, theme?: Partial<Theme>): string {
-	const data = readChart(chart);
-	const resolved = readTheme(theme);
-	return toSvg(layout(data, resolved), resolved);
+	return draw(chart, theme).svg;
 }
 
 /**
@@ -25,7 +23,16 @@ export async function renderPng(
 	chart: HillChart,
 	theme?: Partial<Theme>,
 ): Promise<Uint8Array> {
+	const { data, svg } = draw(chart, theme);
+	return toPng(svg, data);
+}
+
+/** Validates `chart` and `theme`, then draws the SVG, keeping the validated data. */
+function draw(
+	chart: HillChart,
+	theme: Partial<Theme> | undefined,
+): { data: HillChart; svg: string } {
 	const data = readChart(chart);
 	const resolved = readTheme(theme);
-	return toPng(toSvg(layout(data, resolved), resolved), data);
+	return { data, svg: toSvg(layout(data, resolved), resolved) };
 }

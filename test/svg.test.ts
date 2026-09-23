@@ -47,6 +47,7 @@ const fixtures = [
 	"crowded",
 	"long-names",
 	"title-subtitle",
+	"uncovered",
 ];
 
 describe("renderSvg", () => {

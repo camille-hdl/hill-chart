@@ -21,6 +21,7 @@ const fixtures = [
 	"crowded",
 	"long-names",
 	"title-subtitle",
+	"uncovered",
 ];
 
 function fixture(name: string): HillChart {

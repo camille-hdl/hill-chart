@@ -33,16 +33,20 @@ function tempFile(name: string, content: string): string {
 	return path;
 }
 
+/** Which fake streams claim to be a terminal. */
+type Terminal = { stdin?: boolean; stdout?: boolean };
+
 /** Runs the CLI with fake streams, `stdin` holding the given text, and returns what it wrote as bytes. */
 async function runCliBytes(
 	args: string[],
 	stdin = "",
-	stdinIsTTY = false,
-	stdoutIsTTY = false,
+	terminal: Terminal = {},
 ) {
 	const io = {
-		stdin: Object.assign(new PassThrough(), { isTTY: stdinIsTTY }),
-		stdout: Object.assign(new PassThrough(), { isTTY: stdoutIsTTY }),
+		stdin: Object.assign(new PassThrough(), { isTTY: terminal.stdin ?? false }),
+		stdout: Object.assign(new PassThrough(), {
+			isTTY: terminal.stdout ?? false,
+		}),
 		stderr: new PassThrough(),
 	};
 	io.stdin.end(stdin);
@@ -53,18 +57,8 @@ async function runCliBytes(
 }
 
 /** Runs the CLI with fake streams, `stdin` holding the given text, and returns what it wrote as text. */
-async function runCli(
-	args: string[],
-	stdin = "",
-	stdinIsTTY = false,
-	stdoutIsTTY = false,
-) {
-	const { code, stdout, stderr } = await runCliBytes(
-		args,
-		stdin,
-		stdinIsTTY,
-		stdoutIsTTY,
-	);
+async function runCli(args: string[], stdin = "", terminal: Terminal = {}) {
+	const { code, stdout, stderr } = await runCliBytes(args, stdin, terminal);
 	return { code, stdout: stdout.toString(), stderr: stderr.toString() };
 }
 
@@ -385,13 +379,15 @@ describe("run, on help, version and usage errors", () => {
 	test("prints the help on stderr and exits 2 when given no file and stdin is a terminal", async () => {
 		const [{ stdout: help }, noFile] = await Promise.all([
 			runCli(["--help"]),
-			runCli([], sampleJson, true),
+			runCli([], sampleJson, { stdin: true }),
 		]);
 		assert.deepEqual(noFile, { code: 2, stdout: "", stderr: help });
 	});
 
 	test("prints the help on stdout and exits 0 with --help, even when stdin is a terminal", async () => {
-		const { code, stdout, stderr } = await runCli(["--help"], "", true);
+		const { code, stdout, stderr } = await runCli(["--help"], "", {
+			stdin: true,
+		});
 		assert.deepEqual({ code, stderr }, { code: 0, stderr: "" });
 		assert.match(stdout, /^Usage: hill-chart /);
 	});
@@ -405,7 +401,7 @@ describe("run, on help, version and usage errors", () => {
 	});
 
 	test('reads stdin when given "-", even when stdin is a terminal', async () => {
-		assert.deepEqual(await runCli(["-"], sampleJson, true), {
+		assert.deepEqual(await runCli(["-"], sampleJson, { stdin: true }), {
 			code: 0,
 			stdout: sampleSvg,
 			stderr: "",
@@ -487,7 +483,7 @@ describe("run, on PNG output", () => {
 
 	test("refuses to print a PNG when stdout is a terminal", async () => {
 		assert.deepEqual(
-			await runCli([samplePath, "--format", "png"], "", false, true),
+			await runCli([samplePath, "--format", "png"], "", { stdout: true }),
 			{
 				code: 2,
 				stdout: "",
@@ -499,7 +495,9 @@ describe("run, on PNG output", () => {
 
 	test("writes the PNG to -o even when stdout is a terminal", async () => {
 		const output = join(dir, "from-terminal.png");
-		const { code } = await runCli([samplePath, "-o", output], "", false, true);
+		const { code } = await runCli([samplePath, "-o", output], "", {
+			stdout: true,
+		});
 		assert.equal(code, 0);
 		assertSamePng(readFileSync(output));
 	});
