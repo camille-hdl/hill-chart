@@ -1,0 +1,22 @@
+{
+	"title": "Neighbourhood repair café",
+	"scopes": [
+		{
+			"name": "Booking form for repair slots, with reminders sent by text message and by email the day before",
+			"position": 0.12
+		},
+		{
+			"name": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+			"position": 0.3
+		},
+		{ "name": "Waiting list", "position": 0.42 },
+		{
+			"name": "Spare-parts-inventory-shared-with-the-other-cafés and tools",
+			"position": 0.58
+		},
+		{
+			"name": "Monthly report of repaired items, their weight and the waste avoided, for the town council",
+			"position": 0.8
+		}
+	]
+}

@@ -24,7 +24,13 @@ function hill(svg: string): string | undefined {
 }
 
 describe("renderSvg", () => {
-	for (const name of ["sample", "empty", "extremes", "title-subtitle"]) {
+	for (const name of [
+		"sample",
+		"empty",
+		"extremes",
+		"long-names",
+		"title-subtitle",
+	]) {
 		test(`draws the ${name} fixture as in its snapshot`, (t) => {
 			const path = fileURLToPath(
 				new URL(`snapshots/${name}.svg`, import.meta.url),

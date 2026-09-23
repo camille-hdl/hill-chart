@@ -6,7 +6,7 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!dist", "!test/snapshots"]
+		"includes": ["**", "!dist", "!fonts/metrics.json", "!test/snapshots"]
 	},
 	"formatter": {
 		"enabled": true

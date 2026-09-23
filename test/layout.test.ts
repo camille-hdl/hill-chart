@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import { measure } from "../src/font.ts";
 import { type HillChart, readChart, readTheme } from "../src/input.ts";
 import { type Box, type Layout, layout, type Point } from "../src/layout.ts";
 
 const theme = readTheme(undefined);
-const fixtures = ["sample", "empty", "extremes", "title-subtitle"];
+const fixtures = [
+	"sample",
+	"empty",
+	"extremes",
+	"long-names",
+	"title-subtitle",
+];
 
 function fixture(name: string): HillChart {
 	const url = new URL(`fixtures/${name}.json`, import.meta.url);
@@ -92,6 +99,20 @@ for (const name of fixtures) {
 					box.y + box.height <= y + height - margin,
 					`${JSON.stringify(box)} bottom`,
 				);
+			}
+		});
+
+		test("wraps names at 0.3 times the width, never within a word (invariant 6)", () => {
+			const maxWidth = 0.3 * theme.width;
+			for (const { scope, name } of l.scopes) {
+				assert.equal(name.lines.join(" "), scope.name);
+				for (const line of name.lines) {
+					assert.ok(
+						measure(line, name.weight, name.size) <= maxWidth ||
+							!line.includes(" "),
+						`${JSON.stringify(line)} is wider than ${maxWidth} px`,
+					);
+				}
 			}
 		});
 
