@@ -1,8 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { fontFiles, uncovered } from "./font.ts";
 import { codePoint, type HillChart, HillChartError } from "./input.ts";
+import type { Box } from "./layout.ts";
 
 type Resvg = typeof import("@resvg/resvg-wasm").Resvg;
+
+/** The PNG is drawn at this multiple of the SVG's size. */
+const ZOOM = 2;
+/** The most pixels a PNG may have: rasterizing costs about 1.3 s and 0.6 GB at this size, and grows with it. */
+const PIXEL_LIMIT = 50_000_000;
 
 let rasterizer: Promise<Resvg> | undefined;
 
@@ -19,12 +25,14 @@ function loadRasterizer(): Promise<Resvg> {
 	return rasterizer;
 }
 
-/** Rasterizes `svg`, drawn from `chart`, at twice its size, with the embedded font only. */
+/** Rasterizes `svg`, drawn from `chart` within `viewBox`, at twice its size, with the embedded font only. */
 export async function toPng(
 	svg: string,
 	chart: HillChart,
+	viewBox: Box,
 ): Promise<Uint8Array> {
 	checkCoverage(chart);
+	checkPixelCount(viewBox);
 	const Resvg = await loadRasterizer();
 	const resvg = new Resvg(svg, {
 		font: {
@@ -32,7 +40,7 @@ export async function toPng(
 			loadSystemFonts: false,
 			defaultFontFamily: "Atkinson Hyperlegible Next",
 		},
-		fitTo: { mode: "zoom", value: 2 },
+		fitTo: { mode: "zoom", value: ZOOM },
 	});
 	// Frees the WebAssembly memory now, rather than whenever the garbage collector runs the finalizers.
 	try {
@@ -68,5 +76,17 @@ function checkCoverage(chart: HillChart): void {
 				`characters not in the embedded font: ${characters}; render SVG instead`,
 			);
 		}
+	}
+}
+
+/** Throws when the PNG of `viewBox` would have more pixels than the limit, whatever made it so large. */
+function checkPixelCount(viewBox: Box): void {
+	const width = ZOOM * viewBox.width;
+	const height = ZOOM * viewBox.height;
+	if (width * height > PIXEL_LIMIT) {
+		throw new HillChartError(
+			"(root)",
+			`PNG of ${width} × ${height} pixels is over the ${PIXEL_LIMIT / 1_000_000}-megapixel limit; use shorter texts, fewer scopes, a smaller theme.fontSize or theme.width, or render SVG instead`,
+		);
 	}
 }
