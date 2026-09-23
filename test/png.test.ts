@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import { Resvg } from "@resvg/resvg-wasm";
 import {
 	type HillChart,
 	HillChartError,
@@ -36,8 +37,10 @@ function assertSameBytes(actual: Uint8Array, expected: Uint8Array) {
 }
 
 describe("renderPng", () => {
-	// First in the file, so that both calls race to initialize the rasterizer: each test file runs in its own process.
-	test("shares one rasterizer initialization between concurrent calls", async () => {
+	// First in the file, so that both calls are the first to initialize the rasterizer: each test file runs in its own
+	// process. It guards parallel rendering, but cannot catch an unshared initialization: resvg-wasm 2.6.2's `initWasm`
+	// only throws once an init has finished. The sequential tests below catch that.
+	test("draws the same PNG for concurrent first calls", async () => {
 		const chart = fixture("sample");
 		const [first, second] = await Promise.all([
 			renderPng(chart),
@@ -58,6 +61,26 @@ describe("renderPng", () => {
 	test("draws the same bytes on every render", async () => {
 		const chart = fixture("crowded");
 		assertSameBytes(await renderPng(chart), await renderPng(chart));
+	});
+
+	test("frees the rasterizer's WebAssembly memory after each render", async (t) => {
+		type Rasterizer = InstanceType<typeof Resvg>;
+		// The declarations type `Resvg` as a bare constructor, without its prototype.
+		const prototype = (Resvg as unknown as { prototype: Rasterizer }).prototype;
+		const render = prototype.render;
+		const rasterizerFree = t.mock.method(prototype, "free");
+		const imageFrees: { mock: { callCount(): number } }[] = [];
+		t.mock.method(prototype, "render", function (this: Rasterizer) {
+			const image = render.call(this);
+			imageFrees.push(t.mock.method(image, "free"));
+			return image;
+		});
+		await renderPng(fixture("sample"));
+		assert.equal(rasterizerFree.mock.callCount(), 1);
+		assert.deepEqual(
+			imageFrees.map((free) => free.mock.callCount()),
+			[1],
+		);
 	});
 
 	test("refuses the first name the embedded font does not cover, citing each character and suggesting SVG", async () => {

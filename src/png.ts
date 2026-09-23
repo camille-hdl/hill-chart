@@ -34,7 +34,17 @@ export async function toPng(
 		},
 		fitTo: { mode: "zoom", value: 2 },
 	});
-	return resvg.render().asPng();
+	// Frees the WebAssembly memory now, rather than whenever the garbage collector runs the finalizers.
+	try {
+		const image = resvg.render();
+		try {
+			return image.asPng();
+		} finally {
+			image.free();
+		}
+	} finally {
+		resvg.free();
+	}
 }
 
 /** Throws on the first text, in document order, with characters the embedded font lacks: resvg would drop them. */
