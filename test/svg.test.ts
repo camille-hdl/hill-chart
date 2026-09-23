@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { type HillChart, renderSvg } from "../src/index.ts";
+import { readChart, readTheme } from "../src/input.ts";
+import { layout, type Point } from "../src/layout.ts";
 
 function fixture(name: string): HillChart {
 	const url = new URL(`fixtures/${name}.json`, import.meta.url);
@@ -17,6 +19,12 @@ function title(svg: string): string | undefined {
 	return svg.match(/<title>(.*)<\/title>/)?.[1];
 }
 
+/** The `<g class="scope">` holding the name `name`. */
+function group(svg: string, name: string): string | undefined {
+	const groups = svg.match(/<g class="scope">[\s\S]*?<\/g>/g) ?? [];
+	return groups.find((g) => g.includes(`>${name}<`));
+}
+
 /** The `d` of the hill: the last path drawn before the scopes. */
 function hill(svg: string): string | undefined {
 	const beforeScopes = svg.split('<g class="scope">')[0];
@@ -28,6 +36,7 @@ describe("renderSvg", () => {
 		"sample",
 		"empty",
 		"extremes",
+		"crowded",
 		"long-names",
 		"title-subtitle",
 	]) {
@@ -175,7 +184,9 @@ describe("renderSvg", () => {
 		const texts = svg.match(/<text [^>]*>/g) ?? [];
 		const [beforeScopes, ...groups] = svg.split('<g class="scope">');
 		const [axisPath, hillPath] = beforeScopes.match(/<path [^>]*>/g) ?? [];
-		const dots = groups.map((group) => group.match(/<path [^>]*>/)?.[0]);
+		const dots = groups.map(
+			(group) => group.match(/<path [^>]* fill="(?!none)[^>]*>/)?.[0],
+		);
 		assert.equal(fill(svg.match(/<rect [^>]*>/)?.[0]), "#010101");
 		assert.equal(stroke(axisPath), "#050505");
 		assert.equal(stroke(hillPath), "#020202");
@@ -219,16 +230,58 @@ describe("renderSvg", () => {
 		const a = { name: "Plot map", position: 0.08 };
 		const b = { name: "Harvest log", position: 0.5 };
 		const c = { name: "Login", position: 0.97 };
-		const dotOfB = (scopes: HillChart["scopes"]) => {
-			const svg = renderSvg({ scopes });
-			const groups = svg.match(/<g class="scope">[\s\S]*?<\/g>/g) ?? [];
-			const group = groups.find((g) => g.includes(">Harvest log<"));
-			return group?.match(/<path d="([^"]*)"/)?.[1];
-		};
+		const dotOfB = (scopes: HillChart["scopes"]) =>
+			group(renderSvg({ scopes }), "Harvest log")?.match(
+				/<path d="([^"]*)" fill="#990f3d"/,
+			)?.[1];
 		const dot = dotOfB([b]);
 		assert.ok(dot);
 		assert.equal(dotOfB([a, b]), dot);
 		assert.equal(dotOfB([b, a, c]), dot);
+	});
+
+	test("draws a leader line first in the group of a name that moved, in the muted color", () => {
+		const svg = renderSvg(fixture("crowded"), { muted: "#030303" });
+		const moved = group(svg, "Volunteer roster");
+		assert.match(
+			moved ?? "",
+			/^<g class="scope">\n {2}<path d="[^"]*" fill="none" stroke="#030303" [^>]*>\n {2}<path d="[^"]*" fill="#990f3d"\/>\n {2}<text /,
+		);
+		assert.doesNotMatch(group(svg, "Map") ?? "", /fill="none"/);
+	});
+
+	test("draws a scope's leader line the same whatever the order of the other scopes", () => {
+		const a = { name: "Plot map", position: 0.3 };
+		const b = { name: "Seed catalogue import", position: 0.31 };
+		const c = { name: "Login", position: 0.9 };
+		const leaderOfB = (scopes: HillChart["scopes"], seed?: number) =>
+			group(renderSvg({ scopes }, { seed }), b.name)?.match(
+				/<path d="([^"]*)" fill="none"/,
+			)?.[1];
+		const leader = leaderOfB([a, b]);
+		assert.ok(leader);
+		assert.equal(leaderOfB([c, a, b]), leader);
+		assert.equal(leaderOfB([b, c, a]), leader);
+		assert.notEqual(leaderOfB([a, b], 2), leader);
+	});
+
+	test("keeps the drawn hill's ink within 0.3 em of the layout's hill, whatever the seed", () => {
+		const theme = readTheme(undefined);
+		const { hill: samples } = layout(readChart({ scopes: [] }), theme);
+		for (let seed = 1; seed <= 50; seed++) {
+			const svg = renderSvg({ scopes: [] }, { seed });
+			const [, d, strokeWidth] =
+				svg.match(
+					/<path d="([^"]*)" [^>]*stroke="#262a33" stroke-width="([^"]*)"/,
+				) ?? [];
+			const reach = Math.max(
+				...bezierPoints(d).map((p) => polylineDistance(samples, p)),
+			);
+			assert.ok(
+				reach + Number(strokeWidth) / 2 <= 0.3 * theme.fontSize,
+				`seed ${seed}: the ink reaches ${reach} px from the hill`,
+			);
+		}
 	});
 
 	test("writes the same bytes for the same input", () => {
@@ -252,3 +305,52 @@ describe("renderSvg", () => {
 		);
 	});
 });
+
+/** Points along every cubic Bézier curve of a path made of `M` and `C` commands. */
+function bezierPoints(d: string): Point[] {
+	const points: Point[] = [];
+	for (const pass of d.split("M").slice(1)) {
+		const numbers = pass
+			.split(/[\s,C]+/)
+			.filter(Boolean)
+			.map(Number);
+		let start = { x: numbers[0], y: numbers[1] };
+		for (let i = 2; i + 5 < numbers.length; i += 6) {
+			const [c1, c2, end] = [0, 2, 4].map((j) => ({
+				x: numbers[i + j],
+				y: numbers[i + j + 1],
+			}));
+			for (let t = 0; t <= 1; t += 1 / 32) {
+				const [a, b, c, e] = [
+					(1 - t) ** 3,
+					3 * (1 - t) ** 2 * t,
+					3 * (1 - t) * t ** 2,
+					t ** 3,
+				];
+				points.push({
+					x: a * start.x + b * c1.x + c * c2.x + e * end.x,
+					y: a * start.y + b * c1.y + c * c2.y + e * end.y,
+				});
+			}
+			start = end;
+		}
+	}
+	return points;
+}
+
+function polylineDistance(polyline: Point[], p: Point): number {
+	return Math.min(
+		...polyline.slice(1).map((b, i) => {
+			const a = polyline[i];
+			const [dx, dy] = [b.x - a.x, b.y - a.y];
+			const t = Math.min(
+				1,
+				Math.max(
+					0,
+					((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy),
+				),
+			);
+			return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+		}),
+	);
+}

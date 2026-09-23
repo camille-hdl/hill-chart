@@ -8,6 +8,8 @@ const HILL_WOBBLE = 0.12;
 const AXIS_STROKE = 0.11;
 const AXIS_DOT_SPACING = 0.33;
 const AXIS_WOBBLE = 0.1;
+const LEADER_STROKE = 0.07;
+const LEADER_WOBBLE = 0.06;
 
 /** The hill is smoothed through every HILL_STEP-th sample of the layout, then wobbled. */
 const HILL_STEP = 4;
@@ -15,6 +17,8 @@ const HILL_STEP = 4;
 const HILL_PASSES = 2;
 /** The axis is smoothed through this many points, from the top to the ground. */
 const AXIS_POINTS = 5;
+/** A leader line is smoothed through this many points, from its name to its dot. */
+const LEADER_POINTS = 3;
 /** Enough vertices for a dot to stay round once smoothed. */
 const DOT_VERTICES = 12;
 /** How far a dot's outline strays from its radius at most, as a share of it. */
@@ -49,11 +53,16 @@ export function toSvg(layout: Layout, theme: Theme): string {
 			: [
 					`<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${theme.background}"/>`,
 				]),
-		`<path d="${axisPath(layout.axis, em, wobble(theme, "axis"))}" fill="none" stroke="${theme.axis}" stroke-width="${num(AXIS_STROKE * em)}" stroke-linecap="round" stroke-dasharray="0.1 ${num(AXIS_DOT_SPACING * em)}"/>`,
+		`<path d="${wavyLine(layout.axis, AXIS_POINTS, AXIS_WOBBLE * em, wobble(theme, "axis"))}" fill="none" stroke="${theme.axis}" stroke-width="${num(AXIS_STROKE * em)}" stroke-linecap="round" stroke-dasharray="0.1 ${num(AXIS_DOT_SPACING * em)}"/>`,
 		`<path d="${hillPath(layout.hill, em, wobble(theme, "hill"))}" fill="none" stroke="${theme.ink}" stroke-width="${num(HILL_STROKE * em)}" stroke-linecap="round" stroke-linejoin="round"/>`,
-		...layout.scopes.map(({ scope, dot, name }) =>
+		...layout.scopes.map(({ scope, dot, name, leader }) =>
 			[
 				'<g class="scope">',
+				...(leader
+					? [
+							`  <path d="${wavyLine(leader, LEADER_POINTS, LEADER_WOBBLE * em, wobble(theme, `leader:${scope.name}`))}" fill="none" stroke="${theme.muted}" stroke-width="${num(LEADER_STROKE * em)}" stroke-linecap="round"/>`,
+						]
+					: []),
 				`  <path d="${dotPath(dot, wobble(theme, `scope:${scope.name}`))}" fill="${theme.dot}"/>`,
 				`  ${text(name, theme.ink)}`,
 				"</g>",
@@ -91,19 +100,20 @@ function text(block: TextBlock, color: string): string {
 	return `<text text-anchor="${block.anchor}" font-family="${FONT_FAMILY}" font-size="${num(block.size)}" font-weight="${block.weight}" fill="${color}">${lines.join("")}</text>`;
 }
 
-/** A slightly wavy line from the top of the hill to the ground. */
-function axisPath(
-	[top, ground]: Layout["axis"],
-	em: number,
+/** A slightly wavy line from `from` to `to`, smoothed through `count` points each shaken by up to `amplitude`. */
+function wavyLine(
+	[from, to]: [Point, Point],
+	count: number,
+	amplitude: number,
 	random: Random,
 ): string {
-	const points = Array.from({ length: AXIS_POINTS }, (_, i) => {
-		const t = i / (AXIS_POINTS - 1);
+	const points = Array.from({ length: count }, (_, i) => {
+		const t = i / (count - 1);
 		const point = {
-			x: top.x + t * (ground.x - top.x),
-			y: top.y + t * (ground.y - top.y),
+			x: from.x + t * (to.x - from.x),
+			y: from.y + t * (to.y - from.y),
 		};
-		return shake(point, AXIS_WOBBLE * em, random);
+		return shake(point, amplitude, random);
 	});
 	return smooth(points);
 }

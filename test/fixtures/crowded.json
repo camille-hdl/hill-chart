@@ -1,0 +1,21 @@
+{
+	"title": "Bike repair workshop",
+	"subtitle": "Week 7",
+	"scopes": [
+		{ "name": "Opening hours", "position": 0.3 },
+		{ "name": "Volunteer roster", "position": 0.31 },
+		{ "name": "Parts stock", "position": 0.3 },
+		{ "name": "Repair tickets", "position": 0.33 },
+		{ "name": "Reminders sent by text message", "position": 0.28 },
+		{ "name": "Tool check-out", "position": 0.5 },
+		{ "name": "Donations", "position": 0.5 },
+		{ "name": "Receipts", "position": 0.52 },
+		{
+			"name": "Workshop calendar shared with the youth club",
+			"position": 0.7
+		},
+		{ "name": "Waiting list", "position": 0.71 },
+		{ "name": "Map", "position": 0.72 },
+		{ "name": "Feedback form", "position": 0.69 }
+	]
+}

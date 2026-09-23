@@ -27,6 +27,8 @@ export type Layout = {
 	subtitle?: TextBlock;
 };
 
+type Dot = Layout["scopes"][number]["dot"];
+
 /** Height of the hill, as a share of its width. */
 const HILL_HEIGHT = 0.25;
 const HILL_SAMPLES = 48;
@@ -37,7 +39,16 @@ const TEXT_ROOM = 1.2;
 
 // Lengths in em, relative to theme.fontSize.
 const DOT_RADIUS = 0.45;
+/** Between a dot and its own name. */
 const NAME_GAP = 0.5;
+/** Between a name and anything placed before it: another name, a dot, a leader line. */
+const CLEARANCE = 0.25;
+/** Between a name and the hill's centerline, which the drawn hill's ink strays from by up to 0.3 em (svg's Wobble and stroke). */
+const HILL_CLEARANCE = 0.5;
+/** A name whose box has moved further than this from its dot's center, vertically, gets a leader line. */
+const LEADER_THRESHOLD = 1;
+/** Between a leader line and its name. */
+const LEADER_GAP = 0.25;
 const TITLE_GAP = 1;
 const MARGIN = 1;
 const TITLE_SIZE = 1.5;
@@ -58,9 +69,14 @@ export function layout(chart: HillChart, theme: Theme): Layout {
 		y: 0 - height * Math.sin(Math.PI * p),
 	});
 
-	const scopes = chart.scopes.map((scope) =>
-		placeScope(scope, hill(scope.position), theme),
-	);
+	/** The highest point of the hill between `left` and `right`, if the hill spans any of it. */
+	const hillTop = (left: number, right: number): number | undefined => {
+		const [from, to] = [Math.max(left, 0), Math.min(right, width)];
+		if (from > to) return undefined;
+		return hill(Math.min(Math.max(width / 2, from), to) / width).y;
+	};
+
+	const scopes = placeScopes(chart.scopes, hill, hillTop, theme);
 	const envelope = boundingBox([
 		{ x: 0, y: -height, width, height },
 		...scopes.flatMap(({ dot, name }) => [circleBox(dot), name.box]),
@@ -101,20 +117,109 @@ export function layout(chart: HillChart, theme: Theme): Layout {
 	return result;
 }
 
-function placeScope(
-	scope: Scope,
-	center: Point,
+/**
+ * Places every dot on the hill, then every name, from the lowest dot to the highest: each name starts centered on its
+ * dot and only moves up, first clear of the hill, then clear of every dot and of the names and leader lines already
+ * placed.
+ */
+function placeScopes(
+	scopes: Scope[],
+	hill: (p: number) => Point,
+	hillTop: (left: number, right: number) => number | undefined,
 	theme: Theme,
-): Layout["scopes"][number] {
+): Layout["scopes"] {
 	const em = theme.fontSize;
-	const radius = DOT_RADIUS * em;
+	const dots = scopes.map(
+		({ position }): Dot => ({
+			center: hill(position),
+			radius: DOT_RADIUS * em,
+		}),
+	);
+	const obstacles = dots.map((dot) => grow(circleBox(dot), CLEARANCE * em));
+	const placed: Layout["scopes"] = [];
+	const lowestFirst = dots
+		.map((_, i) => i)
+		.sort((i, j) => dots[j].center.y - dots[i].center.y);
+	for (const i of lowestFirst) {
+		const name = placeName(scopes[i], dots[i], obstacles, hillTop, theme);
+		const leader = leaderLine(name, dots[i], em);
+		obstacles.push(
+			...[name.box, ...(leader ? [pointsBox(leader)] : [])].map((box) =>
+				grow(box, CLEARANCE * em),
+			),
+		);
+		placed[i] = {
+			scope: scopes[i],
+			dot: dots[i],
+			name,
+			...(leader && { leader }),
+		};
+	}
+	return placed;
+}
+
+function placeName(
+	scope: Scope,
+	{ center, radius }: Dot,
+	obstacles: Box[],
+	hillTop: (left: number, right: number) => number | undefined,
+	theme: Theme,
+): TextBlock {
+	const em = theme.fontSize;
 	const offset = radius + NAME_GAP * em;
 	const lines = wrap(scope.name, WRAP_WIDTH * theme.width, 600, em);
-	const name =
+	const start =
 		scope.position < 0.5
 			? textBlock(lines, 600, em, "end", center.x - offset, center.y)
 			: textBlock(lines, 600, em, "start", center.x + offset, center.y);
-	return { scope, dot: { center, radius }, name };
+	const { box } = start;
+	const clearance = HILL_CLEARANCE * em;
+	const hillBelow = hillTop(box.x - clearance, box.x + box.width + clearance);
+	const clearOfHill =
+		hillBelow === undefined
+			? box.y
+			: Math.min(box.y, hillBelow - clearance - box.height);
+	const top = firstFreeTop({ ...box, y: clearOfHill }, obstacles);
+	return moveUp(start, box.y - top);
+}
+
+/**
+ * A line from the side of a name that faces its dot, level with its nearest line, to the dot's center, when the name
+ * box has moved away from its dot.
+ */
+function leaderLine(
+	{ anchor, x, lineHeight, box }: TextBlock,
+	{ center }: Dot,
+	em: number,
+): [Point, Point] | undefined {
+	const bottom = box.y + box.height;
+	const away = Math.max(box.y - center.y, center.y - bottom);
+	if (away <= LEADER_THRESHOLD * em) return undefined;
+	const nearestLine = Math.min(
+		Math.max(center.y, box.y + lineHeight / 2),
+		bottom - lineHeight / 2,
+	);
+	const gap = LEADER_GAP * em;
+	return [{ x: anchor === "end" ? x + gap : x - gap, y: nearestLine }, center];
+}
+
+/**
+ * The top of `box` once it has moved up, if needed, until it overlaps none of `obstacles`. Each move puts it right
+ * above the obstacle in its way, so the loop ends.
+ */
+function firstFreeTop(box: Box, obstacles: Box[]): number {
+	let top = box.y;
+	for (let moved = true; moved; ) {
+		moved = false;
+		for (const obstacle of obstacles) {
+			const above = obstacle.y - box.height;
+			if (above < top && overlaps({ ...box, y: top }, obstacle)) {
+				top = above;
+				moved = true;
+			}
+		}
+	}
+	return top;
 }
 
 /** A title or subtitle: one line starting at `x`, its box ending at `bottom`. */
@@ -155,6 +260,18 @@ function textBlock(
 	};
 }
 
+function moveUp(block: TextBlock, distance: number): TextBlock {
+	return {
+		...block,
+		baseline: block.baseline - distance,
+		box: { ...block.box, y: block.box.y - distance },
+	};
+}
+
+function pointsBox([a, b]: [Point, Point]): Box {
+	return boundingBox([a, b].map(({ x, y }) => ({ x, y, width: 0, height: 0 })));
+}
+
 function circleBox({ center, radius }: { center: Point; radius: number }): Box {
 	return {
 		x: center.x - radius,
@@ -162,6 +279,15 @@ function circleBox({ center, radius }: { center: Point; radius: number }): Box {
 		width: 2 * radius,
 		height: 2 * radius,
 	};
+}
+
+function overlaps(a: Box, b: Box): boolean {
+	return (
+		a.x < b.x + b.width &&
+		b.x < a.x + a.width &&
+		a.y < b.y + b.height &&
+		b.y < a.y + a.height
+	);
 }
 
 function boundingBox(boxes: Box[]): Box {
