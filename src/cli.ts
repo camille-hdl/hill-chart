@@ -1,6 +1,6 @@
+import { createReadStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { text } from "node:stream/consumers";
 import { getSystemErrorMessage, parseArgs } from "node:util";
 import {
 	type HillChart,
@@ -162,15 +162,36 @@ async function packageVersion(): Promise<string> {
 }
 
 async function readInput(input: string, io: Io): Promise<string> {
-	return input === "-" ? text(io.stdin) : readFileText(input);
+	return input === "-" ? readLimited(io.stdin, "<stdin>") : readFileText(input);
 }
 
 async function readFileText(path: string): Promise<string> {
 	try {
-		return await readFile(path, "utf8");
+		return await readLimited(createReadStream(path), path);
 	} catch (error) {
+		if (error instanceof Failure) throw error;
 		throw new Failure(`cannot read ${path}: ${systemReason(error)}`, 2);
 	}
+}
+
+/** The most bytes of JSON read from a file or stdin: four times the largest chart the data limits allow. */
+const MAX_INPUT_BYTES = 1024 * 1024;
+
+/** Reads `stream`, coming from `source`, as UTF-8 text, and stops reading once it holds more than `MAX_INPUT_BYTES`. */
+async function readLimited(
+	stream: NodeJS.ReadableStream,
+	source: string,
+): Promise<string> {
+	const chunks: Buffer[] = [];
+	let size = 0;
+	for await (const chunk of stream) {
+		const bytes = Buffer.from(chunk);
+		size += bytes.length;
+		if (size > MAX_INPUT_BYTES)
+			throw new Failure(`${source}: larger than the 1 MiB input limit`, 1);
+		chunks.push(bytes);
+	}
+	return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 async function writeOutput(
