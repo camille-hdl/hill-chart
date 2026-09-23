@@ -187,6 +187,12 @@ describe("readChart", () => {
 			/got 101$/,
 		],
 		[
+			"101 scopes before an invalid title, in document order",
+			{ scopes: scopes(101), title: 1 },
+			"scopes",
+			/got 101$/,
+		],
+		[
 			"an empty name",
 			{ scopes: [{ name: "", position: 0.5 }] },
 			"scopes[0].name",
