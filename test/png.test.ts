@@ -92,6 +92,17 @@ describe("renderPng", () => {
 		});
 	});
 
+	test("cites a right-to-left override the embedded font does not cover as an escape", async () => {
+		await assert.rejects(
+			renderPng({ scopes: [{ name: "a\u202eb", position: 0.5 }] }),
+			{
+				name: "HillChartError",
+				message:
+					'scopes[0].name: characters not in the embedded font: "\\u202e" (U+202E); render SVG instead',
+			},
+		);
+	});
+
 	test("checks the title, then the subtitle, before the names", async () => {
 		const scopes = [{ name: "Ж", position: 0.5 }];
 		await assert.rejects(

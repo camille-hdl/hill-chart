@@ -9,6 +9,7 @@ import {
 	renderSvg,
 	type Theme,
 } from "./index.ts";
+import { escapeUnsafeToPrint } from "./input.ts";
 
 export type Io = {
 	stdin: NodeJS.ReadableStream & { isTTY?: boolean };
@@ -212,10 +213,9 @@ function parseJson(json: string, source: string): unknown {
 	try {
 		return JSON.parse(json);
 	} catch (error) {
-		throw new Failure(
-			`${source}: invalid JSON: ${(error as Error).message}`,
-			1,
-		);
+		// Node's message quotes an excerpt of the input.
+		const reason = escapeUnsafeToPrint((error as Error).message);
+		throw new Failure(`${source}: invalid JSON: ${reason}`, 1);
 	}
 }
 

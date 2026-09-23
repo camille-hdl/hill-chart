@@ -479,6 +479,108 @@ describe("readChart", () => {
 	}
 });
 
+describe("messages quoting the input", () => {
+	/** A character a terminal could act on: control, format, surrogate, private use, unassigned, U+2028 or U+2029. */
+	const unprintable = /[\p{C}\u2028\u2029]/u;
+	const osc = "\u001b]0;TITLE\u0007\r";
+
+	const quoting: [string, () => unknown, string][] = [
+		[
+			"an unknown key at the root",
+			() => readChart({ scopes: [], [osc]: 1 }),
+			'["\\u001b]0;TITLE\\u0007\\r"]: unknown key',
+		],
+		[
+			"an unknown key on a scope",
+			() => readChart({ scopes: [{ name: "A", position: 0.1, [osc]: 1 }] }),
+			'scopes[0]["\\u001b]0;TITLE\\u0007\\r"]: unknown key',
+		],
+		[
+			"an unknown key in the theme",
+			() => readTheme({ [osc]: 1 }),
+			'theme["\\u001b]0;TITLE\\u0007\\r"]: unknown key',
+		],
+		[
+			"an unknown key with a C1 control and a dot",
+			() => readChart({ scopes: [], "\u009b31m.": 1 }),
+			'["\\u009b31m."]: unknown key',
+		],
+		[
+			"an unknown key with a line separator",
+			() => readChart({ scopes: [], "a\u2028b": 1 }),
+			'["a\\u2028b"]: unknown key',
+		],
+		[
+			"a position with a C1 control",
+			() => readChart({ scopes: [{ name: "A", position: "\u009b31mX" }] }),
+			'got "\\u009b31mX"',
+		],
+		[
+			"a color object with a C1 control in a key",
+			() => readTheme({ dot: { "\u009b": "#000" } }),
+			'got {"\\u009b":"#000"}',
+		],
+		[
+			"a duplicate name with a right-to-left override",
+			() =>
+				readChart({
+					scopes: [
+						{ name: "a\u202eb", position: 0.1 },
+						{ name: "a\u202eb", position: 0.2 },
+					],
+				}),
+			'duplicate name "a\\u202eb"',
+		],
+		[
+			"a duplicate name with a format character beyond U+FFFF",
+			() =>
+				readChart({
+					scopes: [
+						{ name: "a\u{e0001}b", position: 0.1 },
+						{ name: "a\u{e0001}b", position: 0.2 },
+					],
+				}),
+			'duplicate name "a\\udb40\\udc01b"',
+		],
+	];
+
+	for (const [situation, read, escaped] of quoting) {
+		test(`escapes ${situation}`, () => {
+			assert.throws(read, (error) => {
+				assert.ok(error instanceof HillChartError);
+				assert.ok(error.message.includes(escaped), error.message);
+				assert.doesNotMatch(error.message, unprintable);
+				return true;
+			});
+		});
+	}
+
+	const printable: [string, () => unknown, string][] = [
+		[
+			"an unknown key in another script",
+			() => readChart({ scopes: [], İstanbul: 1 }),
+			'İstanbul: unknown key; a hill chart has only "title", "subtitle" and "scopes"',
+		],
+		[
+			"a duplicate name in another script",
+			() =>
+				readChart({
+					scopes: [
+						{ name: "Łódź", position: 0.1 },
+						{ name: "Łódź", position: 0.2 },
+					],
+				}),
+			'scopes[1].name: duplicate name "Łódź" (same as scopes[0])',
+		],
+	];
+
+	for (const [situation, read, message] of printable) {
+		test(`keeps ${situation} as written`, () => {
+			assert.throws(read, { name: "HillChartError", message });
+		});
+	}
+});
+
 describe("renderSvg", () => {
 	test("throws the HillChartError of invalid data", () => {
 		assert.throws(
