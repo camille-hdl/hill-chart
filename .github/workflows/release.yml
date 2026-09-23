@@ -24,13 +24,20 @@ jobs:
           node-version: 24
           check-latest: true
           package-manager-cache: false
-      - name: Tag matches the package.json version
+      - name: Tag matches the package.json version, not a prerelease
         run: |
           expected="v$(node -p 'require("./package.json").version')"
           if [ "$GITHUB_REF_NAME" != "$expected" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json, which expects $expected"
             exit 1
           fi
+          # A prerelease would need npm publish --tag, or it would become latest.
+          case "$expected" in
+            *-*)
+              echo "::error::$expected is a prerelease: only patch, minor and major versions are released"
+              exit 1
+              ;;
+          esac
       - run: npm ci
       - run: npx biome ci
       - run: npx tsc --noEmit
