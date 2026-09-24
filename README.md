@@ -3,6 +3,8 @@
 Draws a minimalist, hand-drawn hill chart, as in [Shape Up, chapter 13 “Show Progress”](https://basecamp.com/shapeup/3.4-chapter-13),
 from a JSON list of scopes, to SVG or PNG.
 
+For agent use, the [hill-chart skill](https://github.com/camille-hdl/skills/tree/main/skills/hill-chart) teaches an agent how to use this package.
+
 ![A hill chart of a community garden planner: nine scopes as dots on a hand-drawn hill, each with its name](https://raw.githubusercontent.com/camille-hdl/hill-chart/main/docs/hill-chart.png)
 
 ## Quick start
